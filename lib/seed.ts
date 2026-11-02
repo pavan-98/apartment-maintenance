@@ -5,11 +5,11 @@ export const APARTMENT_NAME = "Srinivasa Sai Vigneswara Puppala Towers";
 
 const FLAT_IDS = ["101", "102", "103", "201", "202", "203", "301", "302", "303", "401", "402", "403", "501", "502", "503"];
 
-/** Owners as written in the maintenance book (September 2026 page). */
+/** Owners as written in the maintenance book (September and October 2026 pages). */
 export const BOOK_FLATS: Flat[] = [
   { id: "101", floor: 1, owner: "N. Raju" },
-  { id: "102", floor: 1, owner: "Ramalakshmi" },
-  { id: "103", floor: 1, owner: "Udayasri Garu" },
+  { id: "102", floor: 1, owner: "Ramabai" },
+  { id: "103", floor: 1, owner: "Udaya Shree" },
   { id: "201", floor: 2, owner: "M.S. Naidu", resident: "Rambabu" },
   { id: "202", floor: 2, owner: "Bhanu Reddy" },
   { id: "203", floor: 2, owner: "Manjula" },
@@ -20,8 +20,8 @@ export const BOOK_FLATS: Flat[] = [
   { id: "402", floor: 4, owner: "Manjula", resident: "Santosh" },
   { id: "403", floor: 4, owner: "Manjula", resident: "K. Jagadeswara Rao" },
   { id: "501", floor: 5, owner: "Pavan Kalyan" },
-  { id: "502", floor: 5, owner: "P. Mani" },
-  { id: "503", floor: 5, owner: "G. Babu Rao" },
+  { id: "502", floor: 5, owner: "Manjula", resident: "P. Mani" },
+  { id: "503", floor: 5, owner: "Manjula", resident: "G. Babu Rao" },
 ];
 
 export const DEFAULT_TEMPLATES: ExpenseTemplate[] = [
@@ -95,70 +95,37 @@ const T = "2026-09-01T09:00:00.000Z";
 const day = (m: string, d: number) => `${m}-${String(d).padStart(2, "0")}`;
 
 /**
- * Made-up October and November 2026, so History has something to show:
- * - October: 202 still unpaid (2 months due), 401 paid only ₹1,000,
- *   a motor repair, and staircase painting collected separately.
- * - November (in progress): 6 flats paid so far, two early expenses.
+ * October 2026 from the maintenance book (page 58):
+ * 102 and 202 did not pay; expenses ₹20,100 including ₹2,000 given to
+ * Joga Rao for Dussehra (marked "please check with Joga Rao").
  */
-function addSampleOctoberNovember(db: DB) {
+function addOctoberFromBook(db: DB) {
   const oct = "2026-10";
-  const octPartial: Record<string, number> = { "401": 1000 };
-  const octPaid = FLAT_IDS.filter((id) => id !== "202");
-  for (const [i, flatId] of octPaid.entries()) {
+  const unpaid = new Set(["102", "202"]);
+  for (const [i, flatId] of FLAT_IDS.filter((id) => !unpaid.has(id)).entries()) {
     db.payments.push({
       id: `demo-p-oct-${flatId}`,
       flatId,
       month: oct,
-      amount: octPartial[flatId] ?? 1500,
-      date: day(oct, Math.min(28, 2 + i)),
+      amount: 1500,
+      date: day(oct, Math.min(28, 3 + i)),
       mode: i % 2 === 0 ? "upi" : "cash",
       createdAt: T,
     });
   }
-  const octAmounts: Record<string, number> = { "t-power": 6210 };
-  for (const [i, t] of DEFAULT_TEMPLATES.entries()) {
-    db.expenses.push({
-      id: `demo-e-oct-${t.id}`,
-      month: oct,
-      category: t.category,
-      label: t.label,
-      amount: octAmounts[t.id] ?? t.amount,
-      date: day(oct, 24 + (i % 5)),
-      createdAt: T,
-    });
-  }
-  db.expenses.push({
-    id: "demo-e-oct-motor",
-    month: oct,
-    category: "Repairs",
-    label: "Water motor repair",
-    amount: 2400,
-    date: day(oct, 14),
-    note: "Motor coil rewinding",
-    createdAt: T,
-  });
-  const paintUnpaid = new Set(["102", "202", "503", "301"]);
-  db.collections.push({
-    id: "demo-c-paint",
-    month: oct,
-    title: "Staircase painting",
-    description: "Painting of staircase walls and railings",
-    perFlatAmount: 600,
-    exemptFlats: [],
-    createdAt: T,
-    costs: [
-      { id: "demo-cc-p1", label: "Paint and primer", amount: 4700 },
-      { id: "demo-cc-p2", label: "Painter labour (2 days)", amount: 3500 },
-    ],
-    payments: FLAT_IDS.filter((id) => !paintUnpaid.has(id)).map((flatId, i) => ({
-      id: `demo-cp-paint-${flatId}`,
-      flatId,
-      amount: 600,
-      date: day(oct, 16 + (i % 8)),
-      mode: "cash" as const,
-    })),
-  });
+  const e = (id: string, category: string, label: string, amount: number, d: number, note?: string) =>
+    db.expenses.push({ id: `demo-e-oct-${id}`, month: oct, category, label, amount, date: day(oct, d), note, createdAt: T });
+  e("salary", "Salary", "Watchman / cleaner salary", 7000, 30);
+  e("power", "Electricity", "Common area electricity bill", 5500, 20, "Bill ₹5,492, rounded to ₹5,500 in the book");
+  e("gvmc", "GVMC & water tank", "GVMC (₹300) + tank cleaning (₹300)", 600, 18);
+  e("lift", "Lift maintenance", "Lift maintenance", 1500, 15);
+  e("liftacc", "Lift maintenance", "Lift accessories", 3000, 15);
+  e("clean", "Cleaning material", "Liquid, bleaching powder etc.", 500, 22);
+  e("dussehra", "Festival", "Dussehra – given to Joga Rao", 2000, 1, "Please check with Joga Rao");
+}
 
+/** Made-up November 2026 (in progress), so the current month has something to show. */
+function addSampleNovember(db: DB) {
   const nov = "2026-11";
   for (const [i, flatId] of ["101", "103", "203", "302", "303", "502"].entries()) {
     db.payments.push({
@@ -177,7 +144,7 @@ function addSampleOctoberNovember(db: DB) {
   );
 }
 
-/** September 2026 from the maintenance book, plus made-up October and November, as sample data. */
+/** September and October 2026 from the maintenance book, plus a made-up November in progress, as sample data. */
 export function demoDB(now: Date = new Date()): DB {
   const db = freshDB(BOOK_FLATS, now);
   const month = "2026-09";
@@ -231,7 +198,8 @@ export function demoDB(now: Date = new Date()): DB {
     },
   ];
 
-  addSampleOctoberNovember(db);
+  addOctoberFromBook(db);
+  addSampleNovember(db);
 
   db.rules = [
     {
@@ -327,7 +295,7 @@ export function demoDB(now: Date = new Date()): DB {
   ];
 
   db.audit = [
-    { id: "demo-a-1", at: T, by: "System", action: "Sample data", detail: "Loaded September 2026 from the maintenance book, plus sample October and November" },
+    { id: "demo-a-1", at: T, by: "System", action: "Sample data", detail: "Loaded September and October 2026 from the maintenance book, plus a sample November" },
   ];
   return db;
 }

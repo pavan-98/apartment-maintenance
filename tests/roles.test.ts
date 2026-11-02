@@ -80,9 +80,9 @@ describe("manager permissions", () => {
   it("blocks changes to past months", () => {
     expect(can({ type: "payment.markAll", flatIds: ["102"], month: "2026-10", date: "2026-11-02", mode: "cash" })).toMatch(/current month/);
     expect(can({ type: "payment.delete", id: "demo-p-101" })).toMatch(/current month/);
-    expect(can({ type: "expense.delete", id: "demo-e-oct-motor" })).toMatch(/current month/);
+    expect(can({ type: "expense.delete", id: "demo-e-oct-dussehra" })).toMatch(/current month/);
     expect(can({ type: "expense.add", month: "2026-10", category: "Misc", label: "x", amount: 1 })).toMatch(/current month/);
-    expect(can({ type: "collection.payment.add", id: "demo-c-paint", flatId: "102", amount: 600, date: "2026-11-02", mode: "cash" })).toMatch(/current month/);
+    expect(can({ type: "collection.payment.add", id: "demo-c-pest", flatId: "102", amount: 1400, date: "2026-11-02", mode: "cash" })).toMatch(/current month/);
   });
 
   it("allows a late payment for old dues, but only what is pending and dated this month", () => {

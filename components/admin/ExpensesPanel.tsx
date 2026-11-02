@@ -7,7 +7,7 @@ import { formatDate, monthLabel } from "@/lib/dates";
 import { Sheet } from "../Sheet";
 import { defaultDateFor, Field, ReceiptInput, SectionTitle, useAdmin } from "./ui";
 
-const BASE_CATEGORIES = ["Salary", "Electricity", "GVMC & water tank", "Lift maintenance", "Cleaning material", "Repairs", "Water", "Misc"];
+const BASE_CATEGORIES = ["Salary", "Electricity", "GVMC & water tank", "Lift maintenance", "Cleaning material", "Repairs", "Water", "Festival", "Misc"];
 
 export function ExpensesPanel({ db, month }: { db: DB; month: MonthKey }) {
   const { run } = useAdmin();

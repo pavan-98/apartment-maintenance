@@ -53,7 +53,7 @@ const en = {
   paymentHistory: "Payment history",
   paidOn: "Paid on {date}",
   close: "Close",
-  demoBanner: "Sample data for a trial run: September 2026 is from the maintenance book; October and November are made up. It will be removed before real use.",
+  demoBanner: "Sample data for a trial run: September and October 2026 are from the maintenance book; November is made up. It will be removed before real use.",
   incomeVsSpent: "Collected vs spent",
   balanceTrend: "Balance at month end",
   showTable: "Show as table",
@@ -150,7 +150,7 @@ const te: Record<Key, string> = {
   paymentHistory: "చెల్లింపుల చరిత్ర",
   paidOn: "{date} న చెల్లించారు",
   close: "మూసివేయి",
-  demoBanner: "ట్రయల్ కోసం నమూనా డేటా: సెప్టెంబర్ 2026 పుస్తకం నుండి; అక్టోబర్, నవంబర్ ఉదాహరణ వివరాలు. అసలు వాడకానికి ముందు ఇది తొలగించబడుతుంది.",
+  demoBanner: "ట్రయల్ కోసం నమూనా డేటా: సెప్టెంబర్, అక్టోబర్ 2026 పుస్తకం నుండి; నవంబర్ ఉదాహరణ వివరాలు. అసలు వాడకానికి ముందు ఇది తొలగించబడుతుంది.",
   incomeVsSpent: "వసూలు, ఖర్చు",
   balanceTrend: "నెలాఖరు నిల్వ",
   showTable: "పట్టికగా చూపు",
@@ -211,6 +211,7 @@ const CATEGORY_TE: Record<string, string> = {
   Repairs: "మరమ్మతులు",
   Water: "నీరు",
   Misc: "ఇతర ఖర్చులు",
+  Festival: "పండుగ ఖర్చులు",
 };
 
 export function categoryLabel(cat: string, lang: Lang): string {

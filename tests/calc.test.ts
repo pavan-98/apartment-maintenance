@@ -34,9 +34,9 @@ describe("September 2026 sample (from the book)", () => {
 
   it("shows unpaid flats in the red alert, including arrears from October", () => {
     const d = duesReport(db, NOW);
-    expect(d.overdue.map((x) => x.flat.id)).toEqual(["102", "202", "401"]);
+    expect(d.overdue.map((x) => x.flat.id)).toEqual(["102", "202"]);
     expect(d.overdue.find((x) => x.flat.id === "202")?.months.map((m) => m.month)).toEqual(["2026-09", "2026-10"]);
-    expect(d.overdueTotal).toBe(5000);
+    expect(d.overdueTotal).toBe(6000);
     // November is still within the grace period (due by the 10th).
     expect(d.upcoming).toHaveLength(9);
   });
@@ -125,17 +125,18 @@ describe("balances and actions", () => {
     expect(activeMonths(demoDB(NOW), new Date("2027-03-01T06:00:00Z"))).toEqual(["2026-09", "2026-10", "2026-11"]);
   });
 
-  it("carries balances through the sample October and November", () => {
+  it("matches the book's October page and carries into November", () => {
     const [sep, oct, nov] = allSummaries(demoDB(NOW), NOW);
     expect(sep.closing).toBe(-1151);
     expect(oct.opening).toBe(-1151);
-    expect(oct.maintenanceCollected).toBe(20500); // 13 × 1,500 + 401 part-paid 1,000
-    expect(oct.collectionIncome).toBe(6600);
-    expect(oct.spent).toBe(18210 + 8200);
-    expect(oct.closing).toBe(-461);
-    expect(oct.flats.find((f) => f.flat.id === "401")?.status).toBe("partial");
-    expect(nov.opening).toBe(-461);
+    expect(oct.maintenanceCollected).toBe(19500); // 13 flats; 102 and 202 unpaid
+    expect(oct.flats.filter((f) => f.status === "unpaid").map((f) => f.flat.id)).toEqual(["102", "202"]);
+    expect(oct.regularExpenses).toBe(20100); // 13,100 + 5,000 + 2,000 Dussehra
+    // Book: 19,500 − 18,100 = 1,400, then −2,000 for Dussehra.
+    expect(oct.closing - oct.opening).toBe(1400 - 2000);
+    expect(oct.closing).toBe(-1751);
+    expect(nov.opening).toBe(-1751);
     expect(nov.paidCount).toBe(6);
-    expect(nov.closing).toBe(6539);
+    expect(nov.closing).toBe(5249);
   });
 });

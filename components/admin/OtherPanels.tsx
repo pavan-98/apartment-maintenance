@@ -258,7 +258,7 @@ export function SettingsPanel({ db, month }: { db: DB; month: MonthKey }) {
         <section className="rounded-2xl border-2 border-crit bg-crit-bg p-4">
           <h2 className="text-lg font-bold text-crit-ink">Sample data is loaded</h2>
           <p className="mt-1 text-sm text-crit-ink">
-            The app is showing sample data for a trial run (September 2026 from the book, plus made-up October and November). When you are ready, remove it to start fresh from{" "}
+            The app is showing sample data for a trial run (September and October 2026 from the book, plus a made-up November). When you are ready, remove it to start fresh from{" "}
             <strong>this month with ₹0</strong>. Flat owner names and phone numbers are kept; payments, expenses, works, rules and notices are removed.
           </p>
           <button
