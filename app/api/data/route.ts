@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { loadDB, storageName, StorageNotConfigured } from "@/lib/store";
-import { publicView } from "@/lib/actions";
-import { currentAdmin } from "@/lib/auth";
+import { storageName, StorageNotConfigured } from "@/lib/store";
+import { getSession, viewFor } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [db, admin] = await Promise.all([loadDB(), currentAdmin()]);
+    const { db, session } = await getSession();
     return NextResponse.json(
-      { db: admin ? db : publicView(db), admin, storage: storageName() },
+      { db: viewFor(db, session), admin: session?.name ?? null, role: session?.role ?? null, storage: storageName() },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {

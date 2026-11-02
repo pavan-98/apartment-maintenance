@@ -85,7 +85,7 @@ describe("WhatsApp sending", () => {
 describe("notices", () => {
   it("posts, edits and hides expired notices", () => {
     let db = freshDB(undefined, NOW);
-    db = applyAction(db, { type: "notice.add", notice: { titleEn: "Lift off", bodyEn: "Lift under repair", titleTe: "లిఫ్ట్ పనిచేయదు", bodyTe: "మరమ్మతు", popup: true } }, "A", NOW);
+    db = applyAction(db, { type: "notice.add", notice: { titleEn: "Lift off", bodyEn: "Lift under repair", titleTe: "లిఫ్ట్ పనిచేయదు", bodyTe: "మరమ్మతు", popupMode: "once" } }, "A", NOW);
     expect(db.notices).toHaveLength(1);
     const id = db.notices[0].id;
     db = applyAction(db, { type: "notice.update", id, notice: { ...db.notices[0], expiresOn: "2026-11-01" } }, "A", NOW);

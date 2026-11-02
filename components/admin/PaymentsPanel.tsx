@@ -2,17 +2,23 @@
 
 import { useState } from "react";
 import type { DB, Flat, MonthKey, PayMode } from "@/lib/types";
-import { flatStatus, inr, maintenanceDue } from "@/lib/calc";
-import { formatDate, monthLabel } from "@/lib/dates";
+import { activeMonths, flatStatus, inr, maintenanceDue } from "@/lib/calc";
+import { compareMonths, formatDate, monthLabel, todayISO } from "@/lib/dates";
 import { flatName } from "@/lib/share";
 import { StatusChip } from "../dashboard";
 import { Sheet } from "../Sheet";
 import { defaultDateFor, Field, ModeSelect, SectionTitle, useAdmin } from "./ui";
 
-export function PaymentsPanel({ db, month }: { db: DB; month: MonthKey }) {
+export function PaymentsPanel({ db, month, isManager }: { db: DB; month: MonthKey; isManager: boolean }) {
   const { run } = useAdmin();
   const [mode, setMode] = useState<PayMode>("cash");
   const [editing, setEditing] = useState<Flat | null>(null);
+  const [late, setLate] = useState<{ flat: Flat; month: MonthKey } | null>(null);
+  // Dues still pending from months before the one being viewed.
+  const earlier = activeMonths(db)
+    .filter((m) => compareMonths(m, month) < 0)
+    .flatMap((m) => db.flats.map((f) => ({ month: m, ...flatStatus(db, f, m) })))
+    .filter((x) => x.pending > 0);
   const [busy, setBusy] = useState<string | null>(null);
   const due = maintenanceDue(db, month);
   const statuses = db.flats.map((f) => flatStatus(db, f, month));
@@ -60,8 +66,30 @@ export function PaymentsPanel({ db, month }: { db: DB; month: MonthKey }) {
             Mark all paid
           </button>
         </div>
-        <MonthAmount db={db} month={month} />
+        {!isManager && <MonthAmount db={db} month={month} />}
       </div>
+
+      {earlier.length > 0 && (
+        <div className="card border-crit/40 p-4">
+          <SectionTitle>Pending from earlier months</SectionTitle>
+          <p className="mb-2 text-sm text-ink-2">If someone pays old dues now, record it here. It counts towards the month it was due for.</p>
+          <ul className="divide-y divide-line rounded-xl border border-line">
+            {earlier.map((x) => (
+              <li key={`${x.month}-${x.flat.id}`} className="flex items-center gap-3 p-2.5">
+                <span className="min-w-0 flex-1 text-sm">
+                  <strong>{x.flat.id}</strong> {flatName(x.flat)}
+                  <span className="block text-xs text-crit-ink">
+                    {monthLabel(x.month)} · {inr(x.pending)} pending
+                  </span>
+                </span>
+                <button className="btn btn-sm" onClick={() => setLate({ flat: x.flat, month: x.month })}>
+                  Record payment
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <ul className="space-y-2">
         {statuses.map((s) => (
@@ -86,7 +114,8 @@ export function PaymentsPanel({ db, month }: { db: DB; month: MonthKey }) {
         ))}
       </ul>
 
-      {editing && <PaymentSheet db={db} flat={editing} month={month} onClose={() => setEditing(null)} />}
+      {editing && <PaymentSheet db={db} flat={editing} month={month} canRemove onClose={() => setEditing(null)} />}
+      {late && <PaymentSheet db={db} flat={late.flat} month={late.month} late canRemove={!isManager} onClose={() => setLate(null)} />}
     </div>
   );
 }
@@ -121,11 +150,26 @@ function MonthAmount({ db, month }: { db: DB; month: MonthKey }) {
   );
 }
 
-function PaymentSheet({ db, flat, month, onClose }: { db: DB; flat: Flat; month: MonthKey; onClose: () => void }) {
+function PaymentSheet({
+  db,
+  flat,
+  month,
+  onClose,
+  late = false,
+  canRemove,
+}: {
+  db: DB;
+  flat: Flat;
+  month: MonthKey;
+  onClose: () => void;
+  /** Recording an earlier month's dues paid now. */
+  late?: boolean;
+  canRemove: boolean;
+}) {
   const { run } = useAdmin();
   const st = flatStatus(db, flat, month);
   const [amount, setAmount] = useState(String(st.pending || st.due));
-  const [date, setDate] = useState(defaultDateFor(month));
+  const [date, setDate] = useState(late ? todayISO() : defaultDateFor(month));
   const [mode, setMode] = useState<PayMode>("cash");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -143,6 +187,7 @@ function PaymentSheet({ db, flat, month, onClose }: { db: DB; flat: Flat; month:
   return (
     <Sheet open onClose={onClose} title={`${flat.id} · ${flatName(flat)}`}>
       <p className="mb-3 text-sm text-ink-2">
+        {late && <strong className="text-crit-ink">Late payment for </strong>}
         {monthLabel(month)} · due {inr(st.due)} · paid {inr(st.paid)}
       </p>
       {st.payments.length > 0 && (
@@ -153,14 +198,16 @@ function PaymentSheet({ db, flat, month, onClose }: { db: DB; flat: Flat; month:
                 <strong className="tnum">{inr(p.amount)}</strong> · {formatDate(p.date)} · {p.mode.toUpperCase()}
                 {p.note && <span className="block text-xs text-muted">{p.note}</span>}
               </span>
-              <button
-                className="btn btn-sm text-crit-ink"
-                onClick={async () => {
-                  if (confirm(`Remove this ${inr(p.amount)} payment?`)) await run({ type: "payment.delete", id: p.id }, "Payment removed");
-                }}
-              >
-                Remove
-              </button>
+              {canRemove && (
+                <button
+                  className="btn btn-sm text-crit-ink"
+                  onClick={async () => {
+                    if (confirm(`Remove this ${inr(p.amount)} payment?`)) await run({ type: "payment.delete", id: p.id }, "Payment removed");
+                  }}
+                >
+                  Remove
+                </button>
+              )}
             </li>
           ))}
         </ul>

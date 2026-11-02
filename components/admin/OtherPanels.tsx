@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { DB, ExpenseTemplate, Flat, MonthKey, Rule } from "@/lib/types";
 import { inr } from "@/lib/calc";
-import { monthLabel } from "@/lib/dates";
+import { formatDate, monthLabel } from "@/lib/dates";
+import { groupRules, RULE_CATEGORIES, rulesShareText } from "@/lib/rules";
 import { downloadText, ledgerCSV } from "@/lib/export";
 import { whatsappLink } from "@/lib/share";
 import { formatPhone } from "@/lib/phone";
@@ -12,13 +13,17 @@ import { Field, SectionTitle, useAdmin } from "./ui";
 
 /* ---------- flats ---------- */
 
-export function FlatsPanel({ db }: { db: DB }) {
+export function FlatsPanel({ db, isManager }: { db: DB; isManager: boolean }) {
   const [editing, setEditing] = useState<Flat | null>(null);
   return (
     <div className="space-y-4">
       <div className="card p-4">
         <SectionTitle>Flats &amp; owners</SectionTitle>
-        <p className="text-sm text-ink-2">Edit owner and resident names. Phone numbers are only visible to admins and are used for WhatsApp reminders.</p>
+        <p className="text-sm text-ink-2">
+          {isManager
+            ? "Update who lives in each flat and their phone numbers. Only the main admin can change owner names."
+            : "Edit owner and resident names. Phone numbers are only visible to admins and are used for WhatsApp reminders."}
+        </p>
       </div>
       <ul className="grid gap-2 sm:grid-cols-2">
         {db.flats.map((f) => (
@@ -37,12 +42,12 @@ export function FlatsPanel({ db }: { db: DB }) {
           </li>
         ))}
       </ul>
-      {editing && <FlatSheet flat={editing} onClose={() => setEditing(null)} />}
+      {editing && <FlatSheet flat={editing} isManager={isManager} onClose={() => setEditing(null)} />}
     </div>
   );
 }
 
-function FlatSheet({ flat, onClose }: { flat: Flat; onClose: () => void }) {
+function FlatSheet({ flat, isManager, onClose }: { flat: Flat; isManager: boolean; onClose: () => void }) {
   const { run } = useAdmin();
   const [owner, setOwner] = useState(flat.owner);
   const [resident, setResident] = useState(flat.resident ?? "");
@@ -52,8 +57,8 @@ function FlatSheet({ flat, onClose }: { flat: Flat; onClose: () => void }) {
   return (
     <Sheet open onClose={onClose} title={`Flat ${flat.id}`}>
       <div className="grid gap-3">
-        <Field label="Owner name">
-          <input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} />
+        <Field label="Owner name" hint={isManager ? "Only the main admin can change this." : undefined}>
+          <input className="input disabled:opacity-60" value={owner} disabled={isManager} onChange={(e) => setOwner(e.target.value)} />
         </Field>
         <Field label="Resident / tenant (if different from owner)">
           <input className="input" value={resident} onChange={(e) => setResident(e.target.value)} placeholder="Leave empty if owner lives here" />
@@ -86,43 +91,68 @@ function FlatSheet({ flat, onClose }: { flat: Flat; onClose: () => void }) {
 export function RulesPanel({ db }: { db: DB }) {
   const { run } = useAdmin();
   const [editing, setEditing] = useState<Rule | "new" | null>(null);
-  const shareText = `*${db.settings.apartmentName} – Apartment rules*\n\n${db.rules
-    .map((r, i) => `${i + 1}. *${r.title}*${r.important ? " ❗" : ""}\n${r.body}`)
-    .join("\n\n")}\n\n${typeof window !== "undefined" ? window.location.origin : ""}/#rules`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const groups = groupRules(db.rules);
+  let n = 0;
   return (
     <div className="space-y-4">
       <div className="card p-4">
         <SectionTitle action={<button className="btn btn-primary" onClick={() => setEditing("new")}>+ Add rule</button>}>
           Apartment rules
         </SectionTitle>
-        <p className="text-sm text-ink-2">Rules show for everyone (owners and tenants) under the “Rules” tab. New or changed rules get a “New” badge for 14 days.</p>
+        <p className="text-sm text-ink-2">
+          Rules are for everyone (owners and tenants) and never expire. Write them in English and Telugu and put each in a topic. Tick
+          “Tell residents” to show a one-time pop-up about a new or changed rule.
+        </p>
         {db.rules.length > 0 && (
-          <a className="btn btn-sm mt-3" href={whatsappLink(shareText)} target="_blank" rel="noopener noreferrer">
-            Share rules on WhatsApp
-          </a>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a className="btn btn-sm" href={whatsappLink(rulesShareText(db, `${origin}/#rules`))} target="_blank" rel="noopener noreferrer">
+              <span className="text-[#1a9e4b]">●</span> Share all rules
+            </a>
+            <a className="btn btn-sm" href="/print-rules" target="_blank" rel="noopener noreferrer">
+              🖨 Print rules
+            </a>
+          </div>
         )}
       </div>
       {db.rules.length === 0 && <p className="card p-6 text-center text-ink-2">No rules yet.</p>}
-      <ol className="space-y-2">
-        {db.rules.map((r, i) => (
-          <li key={r.id} className={`card flex items-start gap-2 p-3 ${r.important ? "border-l-4 border-l-crit" : ""}`}>
-            <div className="flex flex-col gap-1">
-              <button className="btn btn-sm px-2" disabled={i === 0} onClick={() => run({ type: "rule.move", id: r.id, dir: -1 }, "Moved")} aria-label="Move up">
-                ↑
-              </button>
-              <button className="btn btn-sm px-2" disabled={i === db.rules.length - 1} onClick={() => run({ type: "rule.move", id: r.id, dir: 1 }, "Moved")} aria-label="Move down">
-                ↓
-              </button>
-            </div>
-            <button className="min-w-0 flex-1 text-left" onClick={() => setEditing(r)}>
-              <span className="block font-bold">
-                {i + 1}. {r.title} {r.important && <span className="text-crit-ink">❗</span>}
-              </span>
-              <span className="line-clamp-2 text-sm text-ink-2">{r.body}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
+      {groups.map((g) => (
+        <section key={g.category.id}>
+          <h3 className="mb-2 px-1 text-sm font-extrabold uppercase tracking-wide text-ink-2">
+            {g.category.icon} {g.category.en} <span className="font-semibold normal-case">· {g.category.te}</span>
+          </h3>
+          <ol className="space-y-2">
+            {g.rules.map((r, i) => {
+              n += 1;
+              return (
+                <li key={r.id} className={`card flex items-start gap-2 p-3 ${r.important ? "border-l-4 border-l-crit" : ""}`}>
+                  <div className="flex flex-col gap-1">
+                    <button className="btn btn-sm px-2" disabled={i === 0} onClick={() => run({ type: "rule.move", id: r.id, dir: -1 }, "Moved")} aria-label="Move up">
+                      ↑
+                    </button>
+                    <button className="btn btn-sm px-2" disabled={i === g.rules.length - 1} onClick={() => run({ type: "rule.move", id: r.id, dir: 1 }, "Moved")} aria-label="Move down">
+                      ↓
+                    </button>
+                  </div>
+                  <button className="min-w-0 flex-1 text-left" onClick={() => setEditing(r)}>
+                    <span className="block font-bold">
+                      {n}. {r.titleEn || r.titleTe} {r.important && <span className="text-crit-ink">❗</span>}
+                    </span>
+                    {r.titleEn && r.titleTe && <span className="block text-sm font-semibold text-ink-2">{r.titleTe}</span>}
+                    <span className="line-clamp-2 text-sm text-ink-2">{r.bodyEn || r.bodyTe}</span>
+                    <span className="mt-1 block text-xs text-muted">
+                      {r.announce && "📣 Announced · "}
+                      {(!r.titleTe || !r.bodyTe) && "⚠ Telugu missing · "}
+                      {(!r.titleEn || !r.bodyEn) && "⚠ English missing · "}
+                      Updated {formatDate(r.updatedAt.slice(0, 10))}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ))}
       {editing && <RuleSheet rule={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
     </div>
   );
@@ -130,21 +160,58 @@ export function RulesPanel({ db }: { db: DB }) {
 
 function RuleSheet({ rule, onClose }: { rule: Rule | null; onClose: () => void }) {
   const { run } = useAdmin();
-  const [title, setTitle] = useState(rule?.title ?? "");
-  const [body, setBody] = useState(rule?.body ?? "");
-  const [important, setImportant] = useState(!!rule?.important);
+  const [f, setF] = useState({
+    titleEn: rule?.titleEn ?? "",
+    titleTe: rule?.titleTe ?? "",
+    bodyEn: rule?.bodyEn ?? "",
+    bodyTe: rule?.bodyTe ?? "",
+    category: rule?.category ?? "general",
+    important: !!rule?.important,
+    announce: rule ? false : true,
+  });
+  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   return (
-    <Sheet open onClose={onClose} title={rule ? "Edit rule" : "New rule"}>
-      <div className="grid gap-3">
-        <Field label="Title">
-          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Parking" />
-        </Field>
-        <Field label="Details" hint="You can write in Telugu or English.">
-          <textarea className="input min-h-32" value={body} onChange={(e) => setBody(e.target.value)} />
-        </Field>
+    <Sheet open onClose={onClose} title={rule ? "Edit rule" : "New rule"} wide>
+      <Field label="Topic">
+        <select className="input" value={f.category} onChange={(e) => set("category", e.target.value as typeof f.category)}>
+          {RULE_CATEGORIES.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.icon} {c.en} / {c.te}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div className="mt-3 grid gap-4 sm:grid-cols-2">
+        <fieldset className="space-y-3 rounded-xl border border-line p-3">
+          <legend className="px-1 text-sm font-bold">English</legend>
+          <Field label="Title">
+            <input className="input" value={f.titleEn} onChange={(e) => set("titleEn", e.target.value)} placeholder="e.g. Parking" />
+          </Field>
+          <Field label="Rule">
+            <textarea className="input min-h-28" value={f.bodyEn} onChange={(e) => set("bodyEn", e.target.value)} />
+          </Field>
+        </fieldset>
+        <fieldset className="space-y-3 rounded-xl border border-line p-3">
+          <legend className="px-1 text-sm font-bold">తెలుగు</legend>
+          <Field label="శీర్షిక (Title)">
+            <input className="input" lang="te" value={f.titleTe} onChange={(e) => set("titleTe", e.target.value)} placeholder="ఉదా: పార్కింగ్" />
+          </Field>
+          <Field label="నియమం (Rule)">
+            <textarea className="input min-h-28" lang="te" value={f.bodyTe} onChange={(e) => set("bodyTe", e.target.value)} />
+          </Field>
+        </fieldset>
+      </div>
+      <div className="mt-4 grid gap-2">
         <label className="flex items-center gap-2 text-sm font-semibold">
-          <input type="checkbox" className="h-5 w-5" checked={important} onChange={(e) => setImportant(e.target.checked)} />
-          Mark as important (shown in red)
+          <input type="checkbox" className="h-5 w-5" checked={f.important} onChange={(e) => set("important", e.target.checked)} />
+          Mark as important (shown first, in red)
+        </label>
+        <label className="flex items-start gap-2 text-sm font-semibold">
+          <input type="checkbox" className="mt-0.5 h-5 w-5" checked={f.announce} onChange={(e) => set("announce", e.target.checked)} />
+          <span>
+            Tell residents with a one-time pop-up
+            <span className="block text-xs font-normal text-ink-2">Shown once on each phone over the next 30 days. Leave unticked for small wording fixes.</span>
+          </span>
         </label>
       </div>
       <div className="mt-4 flex gap-2">
@@ -152,7 +219,7 @@ function RuleSheet({ rule, onClose }: { rule: Rule | null; onClose: () => void }
           <button
             className="btn text-crit-ink"
             onClick={async () => {
-              if (confirm(`Delete rule "${rule.title}"?`) && (await run({ type: "rule.delete", id: rule.id }, "Rule removed"))) onClose();
+              if (confirm(`Delete rule "${rule.titleEn || rule.titleTe}"?`) && (await run({ type: "rule.delete", id: rule.id }, "Rule removed"))) onClose();
             }}
           >
             Delete
@@ -160,11 +227,9 @@ function RuleSheet({ rule, onClose }: { rule: Rule | null; onClose: () => void }
         )}
         <button
           className="btn btn-primary flex-1"
-          disabled={!title.trim() || !body.trim()}
+          disabled={!(f.titleEn.trim() || f.titleTe.trim()) || !(f.bodyEn.trim() || f.bodyTe.trim())}
           onClick={async () => {
-            const ok = rule
-              ? await run({ type: "rule.update", id: rule.id, title, body, important }, "Rule saved")
-              : await run({ type: "rule.add", title, body, important }, "Rule added");
+            const ok = rule ? await run({ type: "rule.update", id: rule.id, rule: f }, "Rule saved") : await run({ type: "rule.add", rule: f }, "Rule added");
             if (ok) onClose();
           }}
         >

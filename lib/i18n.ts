@@ -86,6 +86,13 @@ const en = {
   ofN: "{i} of {n}",
   print: "Print",
   shareNotice: "Share",
+  rulesUpdated: "Apartment rules updated",
+  rulesUpdatedIntro: "Please read the new or changed rules:",
+  printRules: "Print rules",
+  shareRules: "Share rules",
+  untilDate: "Until {date}",
+  alwaysShown: "Always shown",
+  rulesCount: "{n} rules",
 } as const;
 
 export type Key = keyof typeof en;
@@ -176,6 +183,13 @@ const te: Record<Key, string> = {
   ofN: "{n} లో {i}",
   print: "ప్రింట్",
   shareNotice: "పంపండి",
+  rulesUpdated: "అపార్ట్‌మెంట్ నియమాలు మారాయి",
+  rulesUpdatedIntro: "దయచేసి కొత్త లేదా మార్చిన నియమాలను చదవండి:",
+  printRules: "నియమాలు ప్రింట్",
+  shareRules: "నియమాలు పంపండి",
+  untilDate: "{date} వరకు",
+  alwaysShown: "ఎల్లప్పుడూ",
+  rulesCount: "{n} నియమాలు",
 };
 
 export const dict: Record<Lang, Record<Key, string>> = { en, te };

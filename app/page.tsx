@@ -18,8 +18,8 @@ import {
   WhatsAppButton,
 } from "@/components/dashboard";
 import { HistoryTab } from "@/components/HistoryTab";
-import { RulesTab, isRecent } from "@/components/RulesTab";
-import { NoticePopup, NoticesTab, useUnseenNotices } from "@/components/Notices";
+import { RulesTab } from "@/components/RulesTab";
+import { StartupPopups, NoticesTab, useUnseenNoticeCount, useUnseenRuleCount } from "@/components/Notices";
 
 type Tab = "month" | "notices" | "history" | "rules";
 const TABS: Tab[] = ["month", "notices", "history", "rules"];
@@ -51,8 +51,8 @@ export default function Home() {
   const dues = useMemo(() => (db ? duesReport(db) : null), [db]);
   const current = month && months.includes(month) ? month : db ? defaultMonth(db) : null;
   const s = summaries.find((x) => x.month === current);
-  const newRules = db?.rules.filter((r) => isRecent(r)).length ?? 0;
-  const unseenNotices = useUnseenNotices(db).length;
+  const newRules = useUnseenRuleCount(db);
+  const unseenNotices = useUnseenNoticeCount(db);
   const badge = (k: Tab) => (k === "rules" ? newRules : k === "notices" ? unseenNotices : 0);
 
   return (
@@ -117,7 +117,7 @@ export default function Home() {
               />
             )}
             {tab === "notices" && <NoticesTab db={db} />}
-            {tab === "rules" && <RulesTab rules={db.rules} />}
+            {tab === "rules" && <RulesTab db={db} />}
           </div>
         )}
       </main>
@@ -148,7 +148,7 @@ export default function Home() {
         </nav>
       )}
       {flat && db && <FlatSheet db={db} flat={flat} onClose={() => setFlat(null)} />}
-      {db && <NoticePopup db={db} />}
+      {db && <StartupPopups db={db} />}
     </>
   );
 }

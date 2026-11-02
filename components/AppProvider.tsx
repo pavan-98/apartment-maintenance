@@ -1,13 +1,15 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { DB } from "@/lib/types";
+import type { DB, Role } from "@/lib/types";
 import type { Action } from "@/lib/actions";
 import { translate, type Key, type Lang } from "@/lib/i18n";
 
 interface Ctx {
   db: DB | null;
   admin: string | null;
+  /** "owner" = main admin, "manager" = limited admin, null = resident */
+  role: Role | null;
   storage: string | null;
   loading: boolean;
   error: string | null;
@@ -43,6 +45,7 @@ function writeLS(key: string, value: string) {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<DB | null>(null);
   const [admin, setAdmin] = useState<string | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
   const [storage, setStorage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!res.ok) throw new Error(json.error || "Failed");
       setDb(json.db);
       setAdmin(json.admin);
+      setRole(json.role ?? null);
       setStorage(json.storage);
       setError(null);
       setOffline(false);
@@ -107,7 +111,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ action }),
       });
       const json = await res.json();
-      if (res.status === 401) setAdmin(null);
+      if (res.status === 401) {
+        setAdmin(null);
+        setRole(null);
+      }
       if (!res.ok) return json.error || "Could not save";
       setDb(json.db);
       return null;
@@ -119,8 +126,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const t = useCallback((key: Key, vars?: Record<string, string | number>) => translate(lang, key, vars), [lang]);
 
   const value = useMemo(
-    () => ({ db, admin, storage, loading, error, offline, reload, act, setAdmin, lang, setLang, t }),
-    [db, admin, storage, loading, error, offline, reload, act, lang, setLang, t],
+    () => ({ db, admin, role, storage, loading, error, offline, reload, act, setAdmin, lang, setLang, t }),
+    [db, admin, role, storage, loading, error, offline, reload, act, lang, setLang, t],
   );
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

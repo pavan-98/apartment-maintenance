@@ -1,5 +1,5 @@
 import type { DB, ExpenseTemplate, Flat, Settings } from "./types";
-import { currentMonth } from "./dates";
+import { currentMonth, formatDate, todayISO } from "./dates";
 
 export const APARTMENT_NAME = "Srinivasa Sai Vigneswara Puppala Towers";
 
@@ -57,6 +57,7 @@ export function freshDB(flats: Flat[] = BOOK_FLATS, now: Date = new Date()): DB 
     collections: [],
     rules: [],
     notices: [],
+    users: [],
     audit: [],
   };
 }
@@ -65,11 +66,28 @@ export function freshDB(flats: Flat[] = BOOK_FLATS, now: Date = new Date()): DB 
 export function normalizeDB(db: DB): DB {
   return {
     ...db,
-    notices: db.notices ?? [],
-    rules: db.rules ?? [],
+    notices: (db.notices ?? []).map((n) => ({
+      ...n,
+      popupMode: n.popupMode ?? (n.popup ? "once" : "none"),
+    })),
+    rules: (db.rules ?? []).map((r) => ({
+      ...r,
+      titleEn: r.titleEn ?? r.title ?? "",
+      titleTe: r.titleTe ?? "",
+      bodyEn: r.bodyEn ?? r.body ?? "",
+      bodyTe: r.bodyTe ?? "",
+      category: r.category ?? "general",
+    })),
+    users: db.users ?? [],
     collections: db.collections ?? [],
     audit: db.audit ?? [],
   };
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 const T = "2026-09-01T09:00:00.000Z";
@@ -218,37 +236,91 @@ export function demoDB(now: Date = new Date()): DB {
   db.rules = [
     {
       id: "demo-r-1",
-      title: "Maintenance due by the 10th",
-      body: "Monthly maintenance of ₹1,500 should be paid by the 10th of every month.",
+      category: "payments",
+      titleEn: "Maintenance due by the 10th",
+      titleTe: "ప్రతి నెల 10వ తేదీలోపు మెయింటెనెన్స్",
+      bodyEn: "Monthly maintenance of ₹1,500 should be paid by the 10th of every month.",
+      bodyTe: "నెలవారీ మెయింటెనెన్స్ ₹1,500 ప్రతి నెల 10వ తేదీలోపు చెల్లించాలి.",
       important: true,
       createdAt: T,
       updatedAt: T,
     },
     {
       id: "demo-r-2",
-      title: "Keep common areas clear",
-      body: "Do not leave shoes, bicycles or garbage bags in corridors and staircases.",
+      category: "cleanliness",
+      titleEn: "Keep common areas clear",
+      titleTe: "కామన్ ఏరియాలను ఖాళీగా ఉంచండి",
+      bodyEn: "Do not leave shoes, bicycles or garbage bags in corridors and staircases.",
+      bodyTe: "కారిడార్లు, మెట్లపై చెప్పులు, సైకిళ్ళు లేదా చెత్త సంచులు ఉంచకూడదు.",
       createdAt: T,
       updatedAt: T,
     },
     {
       id: "demo-r-3",
-      title: "Lift usage",
-      body: "Children below 10 should use the lift only with an adult. Do not use the lift for heavy construction material.",
+      category: "lift",
+      titleEn: "Lift usage",
+      titleTe: "లిఫ్ట్ వాడకం",
+      bodyEn: "Children below 10 should use the lift only with an adult. Do not use the lift for heavy construction material.",
+      bodyTe: "10 ఏళ్ల లోపు పిల్లలు పెద్దవారితో మాత్రమే లిఫ్ట్ వాడాలి. నిర్మాణ సామగ్రి వంటి బరువైన వస్తువులకు లిఫ్ట్ వాడకూడదు.",
+      createdAt: T,
+      updatedAt: T,
+    },
+    {
+      id: "demo-r-4",
+      category: "parking",
+      titleEn: "Parking",
+      titleTe: "పార్కింగ్",
+      bodyEn: "Park only in your allotted slot. Visitors' vehicles must not block the gate.",
+      bodyTe: "మీకు కేటాయించిన స్థలంలో మాత్రమే వాహనం పార్క్ చేయండి. సందర్శకుల వాహనాలు గేటుకు అడ్డుగా ఉంచకూడదు.",
+      announce: true,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    },
+    {
+      id: "demo-r-5",
+      category: "water",
+      titleEn: "Report water leaks",
+      titleTe: "నీటి లీకేజీలు తెలియజేయండి",
+      bodyEn: "Report leaking taps or an overflowing tank to the watchman immediately.",
+      bodyTe: "కారుతున్న కుళాయిలు లేదా ట్యాంక్ పొంగిపొర్లడం గమనిస్తే వెంటనే వాచ్‌మన్‌కు తెలియజేయండి.",
       createdAt: T,
       updatedAt: T,
     },
   ];
 
+  const today = todayISO(now);
+  const nowIso = now.toISOString();
   db.notices = [
+    {
+      id: "demo-n-lift",
+      titleEn: "Lift servicing — lift will be off",
+      titleTe: "లిఫ్ట్ సర్వీసింగ్ — లిఫ్ట్ పనిచేయదు",
+      bodyEn: `The lift will be switched off for servicing on ${formatDate(addDaysISO(today, 5))} from 10 AM to 2 PM. Please use the stairs during this time.`,
+      bodyTe: `${formatDate(addDaysISO(today, 5), "te")} న ఉదయం 10 నుండి మధ్యాహ్నం 2 వరకు సర్వీసింగ్ కోసం లిఫ్ట్ ఆపివేయబడుతుంది. దయచేసి ఆ సమయంలో మెట్లు వాడండి.`,
+      important: true,
+      popupMode: "every",
+      expiresOn: addDaysISO(today, 5),
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
     {
       id: "demo-n-1",
       titleEn: "Water tank cleaning on Sunday",
       titleTe: "ఆదివారం వాటర్ ట్యాంక్ శుభ్రత",
       bodyEn: "The overhead water tank will be cleaned this Sunday from 9 AM to 1 PM. There will be no water supply during this time. Please store water in advance.",
       bodyTe: "ఈ ఆదివారం ఉదయం 9 నుండి మధ్యాహ్నం 1 గంట వరకు పైన ఉన్న వాటర్ ట్యాంక్ శుభ్రం చేయబడుతుంది. ఈ సమయంలో నీటి సరఫరా ఉండదు. దయచేసి ముందుగానే నీరు నిల్వ చేసుకోండి.",
-      important: true,
-      popup: true,
+      popupMode: "once",
+      expiresOn: addDaysISO(today, 10),
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: "demo-n-contacts",
+      titleEn: "Emergency help",
+      titleTe: "అత్యవసర సహాయం",
+      bodyEn: "Watchman is available at the gate 24×7.\nIf stuck in the lift, press the alarm button and stay calm.\nFor water or power problems, inform the watchman first.",
+      bodyTe: "వాచ్‌మన్ గేటు వద్ద 24 గంటలూ అందుబాటులో ఉంటారు.\nలిఫ్ట్‌లో ఇరుక్కుపోతే అలారం బటన్ నొక్కి ప్రశాంతంగా ఉండండి.\nనీరు లేదా కరెంటు సమస్యలకు ముందుగా వాచ్‌మన్‌కు తెలియజేయండి.",
+      popupMode: "none",
       createdAt: T,
       updatedAt: T,
     },

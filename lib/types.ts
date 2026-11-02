@@ -70,14 +70,38 @@ export interface SpecialCollection {
   createdAt: string;
 }
 
+export type RuleCategory =
+  | "general"
+  | "payments"
+  | "parking"
+  | "water"
+  | "lift"
+  | "cleanliness"
+  | "security"
+  | "pets"
+  | "noise"
+  | "other";
+
+/** An apartment rule, in English and Telugu. Rules don't expire. */
 export interface Rule {
   id: string;
-  title: string;
-  body: string;
+  titleEn: string;
+  titleTe: string;
+  bodyEn: string;
+  bodyTe: string;
+  category: RuleCategory;
   important?: boolean;
+  /** Tell residents once with a pop-up after this rule is added or changed. */
+  announce?: boolean;
   createdAt: string;
   updatedAt: string;
+  /** @deprecated older single-language rules; migrated to titleEn/bodyEn */
+  title?: string;
+  /** @deprecated */
+  body?: string;
 }
+
+export type PopupMode = "every" | "once" | "none";
 
 /** A notice for all residents, written in English and Telugu. */
 export interface Notice {
@@ -87,10 +111,17 @@ export interface Notice {
   bodyEn: string;
   bodyTe: string;
   important?: boolean;
-  /** Show as a pop-up when residents open the app (until they tap OK). */
-  popup: boolean;
-  /** Last day the notice is shown (YYYY-MM-DD); empty = no end date. */
+  /**
+   * How the pop-up behaves when residents open the app:
+   * - "every": every time the app is opened, until the end date
+   * - "once":  once per phone (until the notice is edited)
+   * - "none":  no pop-up, only listed in the Notices tab
+   */
+  popupMode: PopupMode;
+  /** Last day the notice is shown (YYYY-MM-DD). Empty = keep showing in the Notices tab. */
   expiresOn?: string;
+  /** @deprecated older boolean flag; migrated to popupMode */
+  popup?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -118,6 +149,7 @@ export interface Settings {
   expenseTemplates: ExpenseTemplate[];
   /** True while the September 2026 sample data is loaded. */
   isDemo: boolean;
+  /** @deprecated */
   demoMonth?: MonthKey;
 }
 
@@ -129,6 +161,26 @@ export interface AuditEntry {
   detail: string;
 }
 
+/**
+ * A manager: a second admin with limited rights (current month only, no
+ * settings, rules, team or edit history). The main admin logs in with
+ * ADMIN_PASSWORD and is not stored here.
+ */
+export interface AdminUser {
+  id: string;
+  name: string;
+  role: "manager";
+  /** scrypt hash; never sent to the browser */
+  passwordHash: string;
+  active: boolean;
+  /** Bumped on password reset / disable so old logins stop working. */
+  sessionVersion: number;
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
+export type Role = "owner" | "manager";
+
 export interface DB {
   version: number;
   settings: Settings;
@@ -138,5 +190,6 @@ export interface DB {
   collections: SpecialCollection[];
   rules: Rule[];
   notices: Notice[];
+  users: AdminUser[];
   audit: AuditEntry[];
 }

@@ -5,6 +5,8 @@ import type {
   Expense,
   ExpenseTemplate,
   Notice,
+  PopupMode,
+  AdminUser,
   Flat,
   PayMode,
   Payment,
@@ -14,6 +16,7 @@ import type {
 } from "./types";
 import { isMonthKey, currentMonth } from "./dates";
 import { normalizePhone } from "./phone";
+import { isRuleCategory } from "./rules";
 import { demoDB, freshDB } from "./seed";
 import { inr } from "./calc";
 
@@ -38,15 +41,31 @@ export type Action =
   | { type: "collection.cost.delete"; id: string; costId: string }
   | { type: "collection.payment.add"; id: string; flatId: string; amount: number; date: string; mode: PayMode; note?: string }
   | { type: "collection.payment.delete"; id: string; paymentId: string }
-  | { type: "rule.add"; title: string; body: string; important?: boolean }
-  | { type: "rule.update"; id: string; title: string; body: string; important?: boolean }
+  | { type: "rule.add"; rule: RuleInput }
+  | { type: "rule.update"; id: string; rule: RuleInput }
   | { type: "rule.delete"; id: string }
   | { type: "rule.move"; id: string; dir: -1 | 1 }
   | { type: "settings.update"; settings: Partial<Pick<Settings, "apartmentName" | "maintenanceAmount" | "startMonth" | "openingBalance" | "carryForward" | "dueDay">> }
   | { type: "settings.monthAmount"; month: string; amount: number | null }
   | { type: "template.save"; templates: ExpenseTemplate[] }
   | { type: "data.clearDemo" }
-  | { type: "data.loadDemo" };
+  | { type: "data.loadDemo" }
+  // Manager accounts (main admin only). Passwords are hashed by the server
+  // before the action is applied; the browser sends `password`.
+  | { type: "user.add"; name: string; password?: string; passwordHash?: string }
+  | { type: "user.resetPassword"; id: string; password?: string; passwordHash?: string }
+  | { type: "user.setActive"; id: string; active: boolean }
+  | { type: "user.remove"; id: string };
+
+export interface RuleInput {
+  titleEn?: string;
+  titleTe?: string;
+  bodyEn?: string;
+  bodyTe?: string;
+  category?: string;
+  important?: boolean;
+  announce?: boolean;
+}
 
 export interface NoticeInput {
   titleEn?: string;
@@ -54,7 +73,7 @@ export interface NoticeInput {
   bodyEn?: string;
   bodyTe?: string;
   important?: boolean;
-  popup?: boolean;
+  popupMode?: PopupMode;
   expiresOn?: string;
 }
 
@@ -120,7 +139,38 @@ function noticeFields(n: NoticeInput | undefined) {
   if (!titleEn && !titleTe) throw new ActionError("Please give the notice a title (English or Telugu)");
   if (!bodyEn && !bodyTe) throw new ActionError("Please write the notice (English or Telugu)");
   const expiresOn = x.expiresOn ? date(x.expiresOn, "Show until date") : undefined;
-  return { titleEn, titleTe, bodyEn, bodyTe, important: !!x.important, popup: !!x.popup, expiresOn };
+  const popupMode: PopupMode = x.popupMode === "every" || x.popupMode === "once" ? x.popupMode : "none";
+  if (popupMode === "every" && !expiresOn) {
+    throw new ActionError("A notice that pops up every time needs an end date (the notice date)");
+  }
+  return { titleEn, titleTe, bodyEn, bodyTe, important: !!x.important, popupMode, expiresOn };
+}
+
+function ruleFields(r: RuleInput | undefined) {
+  const x = r ?? {};
+  const titleEn = text(x.titleEn ?? "", "English title", 150, false);
+  const titleTe = text(x.titleTe ?? "", "Telugu title", 150, false);
+  const bodyEn = text(x.bodyEn ?? "", "English rule", 3000, false);
+  const bodyTe = text(x.bodyTe ?? "", "Telugu rule", 3000, false);
+  if (!titleEn && !titleTe) throw new ActionError("Please give the rule a title (English or Telugu)");
+  if (!bodyEn && !bodyTe) throw new ActionError("Please write the rule (English or Telugu)");
+  const category = isRuleCategory(x.category) ? x.category : "general";
+  return { titleEn, titleTe, bodyEn, bodyTe, category, important: !!x.important, announce: !!x.announce };
+}
+
+export function ruleLabel(r: Pick<Rule, "titleEn" | "titleTe">): string {
+  return r.titleEn || r.titleTe;
+}
+
+function findUser(db: DB, id: unknown): AdminUser {
+  const u = db.users.find((x) => x.id === id);
+  if (!u) throw new ActionError("Manager not found");
+  return u;
+}
+
+function hashOf(v: unknown): string {
+  if (typeof v !== "string" || !v.startsWith("scrypt$")) throw new ActionError("Password missing");
+  return v;
 }
 
 export function noticeTitle(n: Pick<Notice, "titleEn" | "titleTe">): string {
@@ -194,6 +244,7 @@ export function applyAction(input: DB, action: Action, by: string, now: Date = n
       if (!n) throw new ActionError("Notice not found");
       Object.assign(n, noticeFields(action.notice), { updatedAt: at });
       if (!n.expiresOn) delete n.expiresOn;
+      delete n.popup;
       log("Notice edited", noticeTitle(n));
       break;
     }
@@ -372,39 +423,36 @@ export function applyAction(input: DB, action: Action, by: string, now: Date = n
       break;
     }
     case "rule.add": {
-      const r: Rule = {
-        id: uid("r"),
-        title: text(action.title, "Title", 120),
-        body: text(action.body, "Details", 3000),
-        important: !!action.important,
-        createdAt: at,
-        updatedAt: at,
-      };
+      const r: Rule = { id: uid("r"), ...ruleFields(action.rule), createdAt: at, updatedAt: at };
       db.rules.push(r);
-      log("Rule added", r.title);
+      log("Rule added", ruleLabel(r));
       break;
     }
     case "rule.update": {
       const r = db.rules.find((x) => x.id === action.id);
       if (!r) throw new ActionError("Rule not found");
-      r.title = text(action.title, "Title", 120);
-      r.body = text(action.body, "Details", 3000);
-      r.important = !!action.important;
-      r.updatedAt = at;
-      log("Rule edited", r.title);
+      Object.assign(r, ruleFields(action.rule), { updatedAt: at });
+      delete r.title;
+      delete r.body;
+      log("Rule edited", ruleLabel(r));
       break;
     }
     case "rule.delete": {
       const r = db.rules.find((x) => x.id === action.id);
       if (!r) throw new ActionError("Rule not found");
       db.rules = db.rules.filter((x) => x.id !== r.id);
-      log("Rule removed", r.title);
+      log("Rule removed", ruleLabel(r));
       break;
     }
     case "rule.move": {
+      // Move within the same topic (rules are shown grouped by topic).
       const i = db.rules.findIndex((x) => x.id === action.id);
-      const j = i + (action.dir === -1 ? -1 : 1);
-      if (i < 0 || j < 0 || j >= db.rules.length) break;
+      if (i < 0) break;
+      const cat = db.rules[i].category;
+      const step = action.dir === -1 ? -1 : 1;
+      let j = i + step;
+      while (j >= 0 && j < db.rules.length && db.rules[j].category !== cat) j += step;
+      if (j < 0 || j >= db.rules.length) break;
       [db.rules[i], db.rules[j]] = [db.rules[j], db.rules[i]];
       break;
     }
@@ -443,6 +491,44 @@ export function applyAction(input: DB, action: Action, by: string, now: Date = n
       log("Regular expenses list changed", `${db.settings.expenseTemplates.length} items`);
       break;
     }
+    case "user.add": {
+      const name = text(action.name, "Name", 40);
+      if (name.length < 2) throw new ActionError("Name is too short");
+      if (db.users.some((u) => u.name.toLowerCase() === name.toLowerCase())) {
+        throw new ActionError("A manager with this name already exists");
+      }
+      db.users.push({
+        id: uid("u"),
+        name,
+        role: "manager",
+        passwordHash: hashOf(action.passwordHash),
+        active: true,
+        sessionVersion: 1,
+        createdAt: at,
+      });
+      log("Manager added", name);
+      break;
+    }
+    case "user.resetPassword": {
+      const u = findUser(db, action.id);
+      u.passwordHash = hashOf(action.passwordHash);
+      u.sessionVersion += 1;
+      log("Manager password changed", u.name);
+      break;
+    }
+    case "user.setActive": {
+      const u = findUser(db, action.id);
+      u.active = !!action.active;
+      u.sessionVersion += 1;
+      log(u.active ? "Manager access restored" : "Manager access paused", u.name);
+      break;
+    }
+    case "user.remove": {
+      const u = findUser(db, action.id);
+      db.users = db.users.filter((x) => x.id !== u.id);
+      log("Manager removed", u.name);
+      break;
+    }
     case "data.clearDemo": {
       const fresh = freshDB(db.flats, now);
       fresh.settings.expenseTemplates = db.settings.expenseTemplates;
@@ -451,12 +537,14 @@ export function applyAction(input: DB, action: Action, by: string, now: Date = n
       fresh.settings.dueDay = db.settings.dueDay;
       fresh.settings.startMonth = currentMonth(now);
       fresh.version = db.version;
+      fresh.users = db.users;
       fresh.audit = [{ id: uid("a"), at, by, action: "Started fresh", detail: `Sample data removed; books start ${fresh.settings.startMonth} with ₹0` }];
       return fresh;
     }
     case "data.loadDemo": {
       const demo = demoDB(now);
       demo.version = db.version;
+      demo.users = db.users;
       demo.audit.unshift({ id: uid("a"), at, by, action: "Sample data", detail: "Loaded sample data (September–November 2026)" });
       return demo;
     }
@@ -466,11 +554,22 @@ export function applyAction(input: DB, action: Action, by: string, now: Date = n
   return db;
 }
 
-/** Strip admin-only fields before sending data to residents. */
+/** What residents see: no phone numbers, notes, managers or edit history. */
 export function publicView(db: DB): DB {
   return {
     ...db,
     flats: db.flats.map(({ phone: _p, residentPhone: _r, notes: _n, ...f }) => f),
+    users: [],
     audit: [],
   };
+}
+
+/** What a manager sees: everything needed to run the month, but no edit history or team list. */
+export function managerView(db: DB): DB {
+  return { ...db, users: [], audit: [] };
+}
+
+/** What the main admin sees: everything except password hashes. */
+export function ownerView(db: DB): DB {
+  return { ...db, users: db.users.map((u) => ({ ...u, passwordHash: "" })) };
 }

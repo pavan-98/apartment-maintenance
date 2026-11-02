@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { DB, Notice } from "@/lib/types";
+import type { DB, Notice, PopupMode } from "@/lib/types";
 import { duesReport } from "@/lib/calc";
 import { formatDate, todayISO } from "@/lib/dates";
 import { formatPhone, normalizePhone } from "@/lib/phone";
@@ -26,9 +26,67 @@ function origin() {
 
 /* ===================== Notices ===================== */
 
+const POPUP_LABEL: Record<PopupMode, string> = {
+  every: "🔁 Pops up every time",
+  once: "1️⃣ Pops up once",
+  none: "📌 Notices tab only",
+};
+
 export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (noticeId: string) => void }) {
   const [editing, setEditing] = useState<Notice | "new" | null>(null);
+  const [showExpired, setShowExpired] = useState(false);
   const today = todayISO();
+  const current = db.notices.filter((n) => !n.expiresOn || n.expiresOn >= today);
+  const expired = db.notices.filter((n) => n.expiresOn && n.expiresOn < today);
+
+  const card = (n: Notice, isExpired: boolean) => {
+    const link = `${origin()}/notice?id=${n.id}`;
+    return (
+      <article key={n.id} className={`card p-4 ${n.important ? "border-l-4 border-l-crit" : ""} ${isExpired ? "opacity-70" : ""}`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="flex-1 text-base font-bold">{noticeTitle(n)}</h3>
+          {n.important && <span className="rounded-full bg-crit-bg px-2 py-0.5 text-xs font-bold text-crit-ink">Important</span>}
+        </div>
+        {n.titleTe && n.titleEn && <p className="text-sm font-semibold text-ink-2">{n.titleTe}</p>}
+        <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-semibold">
+          {isExpired ? (
+            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-muted">Expired {formatDate(n.expiresOn)} · hidden from residents</span>
+          ) : (
+            <>
+              <span className={`rounded-full px-2 py-0.5 ${n.popupMode === "none" ? "bg-surface-2 text-ink-2" : "bg-brand-soft text-brand"}`}>{POPUP_LABEL[n.popupMode]}</span>
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-ink-2">{n.expiresOn ? `📅 Until ${formatDate(n.expiresOn)}` : "♾ No end date"}</span>
+            </>
+          )}
+        </div>
+        <p className="mt-2 line-clamp-2 text-sm text-ink-2">{n.bodyEn || n.bodyTe}</p>
+        <p className="mt-1 text-xs text-muted">
+          Posted {formatDate(n.createdAt.slice(0, 10))}
+          {n.updatedAt !== n.createdAt && ` · edited ${formatDate(n.updatedAt.slice(0, 10))}`}
+          {(!n.titleTe || !n.bodyTe) && " · ⚠ Telugu missing"}
+          {(!n.titleEn || !n.bodyEn) && " · ⚠ English missing"}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className="btn btn-sm" onClick={() => setEditing(n)}>
+            ✎ {isExpired ? "Edit / show again" : "Edit"}
+          </button>
+          <a className="btn btn-sm" href={`/notice?id=${n.id}`} target="_blank" rel="noopener noreferrer">
+            🖨 Print
+          </a>
+          {!isExpired && (
+            <>
+              <a className="btn btn-sm" href={whatsappLink(noticeShareText(db, n, link))} target="_blank" rel="noopener noreferrer">
+                <span className="text-[#1a9e4b]">●</span> Share to group
+              </a>
+              <button className="btn btn-sm" onClick={() => onSendToAll(n.id)}>
+                <span className="text-[#1a9e4b]">●</span> Send to each owner
+              </button>
+            </>
+          )}
+        </div>
+      </article>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="card p-4">
@@ -36,55 +94,31 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
           Notices
         </SectionTitle>
         <p className="text-sm text-ink-2">
-          Write each notice in English and Telugu. Notices marked “pop-up” open automatically when residents open the app, until they tap OK.
-          Every notice also appears in the Notices tab, and you can print it or share it on WhatsApp.
+          Write each notice in English and Telugu, and choose how it pops up: <strong>every time</strong> the app is opened until the
+          notice date, <strong>once</strong>, or <strong>not at all</strong> (only in the Notices tab). After its end date a notice is
+          hidden from residents automatically. Notices with no end date stay in the Notices tab.
         </p>
       </div>
-      {db.notices.length === 0 && <p className="card p-6 text-center text-ink-2">No notices yet.</p>}
-      {db.notices.map((n) => {
-        const ended = !!n.expiresOn && n.expiresOn < today;
-        const link = `${origin()}/notice?id=${n.id}`;
-        return (
-          <article key={n.id} className={`card p-4 ${n.important ? "border-l-4 border-l-crit" : ""} ${ended ? "opacity-60" : ""}`}>
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="flex-1 text-base font-bold">{noticeTitle(n)}</h3>
-              {ended ? (
-                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-bold text-muted">Ended</span>
-              ) : n.popup ? (
-                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-bold text-brand">Pop-up on</span>
-              ) : null}
-              {n.important && <span className="rounded-full bg-crit-bg px-2 py-0.5 text-xs font-bold text-crit-ink">Important</span>}
-            </div>
-            {n.titleTe && n.titleEn && <p className="text-sm font-semibold text-ink-2">{n.titleTe}</p>}
-            <p className="mt-1 line-clamp-2 text-sm text-ink-2">{n.bodyEn || n.bodyTe}</p>
-            <p className="mt-1 text-xs text-muted">
-              Posted {formatDate(n.createdAt.slice(0, 10))}
-              {n.updatedAt !== n.createdAt && ` · edited ${formatDate(n.updatedAt.slice(0, 10))}`}
-              {n.expiresOn && ` · shows until ${formatDate(n.expiresOn)}`}
-              {(!n.titleTe || !n.bodyTe) && " · ⚠ Telugu missing"}
-              {(!n.titleEn || !n.bodyEn) && " · ⚠ English missing"}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button className="btn btn-sm" onClick={() => setEditing(n)}>
-                ✎ Edit
-              </button>
-              <a className="btn btn-sm" href={`/notice?id=${n.id}`} target="_blank" rel="noopener noreferrer">
-                🖨 Print
-              </a>
-              <a className="btn btn-sm" href={whatsappLink(noticeShareText(db, n, link))} target="_blank" rel="noopener noreferrer">
-                <span className="text-[#1a9e4b]">●</span> Share to group
-              </a>
-              <button className="btn btn-sm" onClick={() => onSendToAll(n.id)}>
-                <span className="text-[#1a9e4b]">●</span> Send to each owner
-              </button>
-            </div>
-          </article>
-        );
-      })}
+      {current.length === 0 && <p className="card p-6 text-center text-ink-2">No notices showing right now.</p>}
+      {current.map((n) => card(n, false))}
+      {expired.length > 0 && (
+        <div>
+          <button className="btn w-full" onClick={() => setShowExpired((v) => !v)} aria-expanded={showExpired}>
+            {showExpired ? "Hide" : "Show"} expired notices ({expired.length})
+          </button>
+          {showExpired && <div className="mt-3 space-y-3">{expired.map((n) => card(n, true))}</div>}
+        </div>
+      )}
       {editing && <NoticeSheet notice={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }
+
+const POPUP_OPTIONS: { v: PopupMode; title: string; hint: string }[] = [
+  { v: "every", title: "🔁 Every time the app is opened, until the notice date", hint: "For something happening soon: water cut, lift off, a meeting. Needs an end date." },
+  { v: "once", title: "1️⃣ Once", hint: "Pops up one time on each phone (again if you edit the notice)." },
+  { v: "none", title: "📌 Don’t pop up", hint: "Only listed in the Notices tab." },
+];
 
 function NoticeSheet({ notice, onClose }: { notice: Notice | null; onClose: () => void }) {
   const { run } = useAdmin();
@@ -94,12 +128,16 @@ function NoticeSheet({ notice, onClose }: { notice: Notice | null; onClose: () =
     titleTe: notice?.titleTe ?? "",
     bodyTe: notice?.bodyTe ?? "",
     important: !!notice?.important,
-    popup: notice ? notice.popup : true,
+    popupMode: (notice?.popupMode ?? "once") as PopupMode,
     expiresOn: notice?.expiresOn ?? "",
+    keep: notice ? !notice.expiresOn : false,
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  const needsDate = f.popupMode === "every" || !f.keep;
+  const dateMissing = needsDate && !f.expiresOn;
   const save = async () => {
-    const payload = { ...f, expiresOn: f.expiresOn || undefined };
+    const { keep, ...rest } = f;
+    const payload = { ...rest, expiresOn: keep && f.popupMode !== "every" ? undefined : f.expiresOn || undefined };
     const ok = notice
       ? await run({ type: "notice.update", id: notice.id, notice: payload }, "Notice saved — residents will see it again")
       : await run({ type: "notice.add", notice: payload }, "Notice posted");
@@ -127,19 +165,57 @@ function NoticeSheet({ notice, onClose }: { notice: Notice | null; onClose: () =
           </Field>
         </fieldset>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="flex items-center gap-2 text-sm font-semibold">
-          <input type="checkbox" className="h-5 w-5" checked={f.popup} onChange={(e) => set("popup", e.target.checked)} />
-          Show as pop-up when residents open the app
-        </label>
-        <label className="flex items-center gap-2 text-sm font-semibold">
-          <input type="checkbox" className="h-5 w-5" checked={f.important} onChange={(e) => set("important", e.target.checked)} />
-          Mark as important (red)
-        </label>
-        <Field label="Show until (optional)" hint="After this date the notice is hidden from residents.">
-          <input className="input" type="date" value={f.expiresOn} onChange={(e) => set("expiresOn", e.target.value)} />
-        </Field>
-      </div>
+
+      <fieldset className="mt-4">
+        <legend className="label">When residents open the app</legend>
+        <div className="grid gap-2">
+          {POPUP_OPTIONS.map((o) => (
+            <label key={o.v} className={`flex cursor-pointer gap-3 rounded-xl border-2 p-3 ${f.popupMode === o.v ? "border-brand bg-brand-soft" : "border-line"}`}>
+              <input type="radio" name="popupMode" className="mt-1 h-4 w-4" checked={f.popupMode === o.v} onChange={() => set("popupMode", o.v)} />
+              <span>
+                <span className="block text-sm font-bold">{o.title}</span>
+                <span className="block text-xs text-ink-2">{o.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="mt-4">
+        <legend className="label">How long to show it</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${!f.keep || f.popupMode === "every" ? "border-brand bg-brand-soft" : "border-line"}`}>
+            <input type="radio" name="keep" className="mt-1 h-4 w-4" checked={!f.keep || f.popupMode === "every"} onChange={() => set("keep", false)} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold">Until the notice date</span>
+              <input
+                className={`input mt-1 ${dateMissing ? "border-crit" : ""}`}
+                type="date"
+                value={f.expiresOn}
+                onChange={(e) => setF((x) => ({ ...x, expiresOn: e.target.value, keep: false }))}
+              />
+              <span className="mt-1 block text-xs text-ink-2">After this day it is hidden from residents and marked expired here.</span>
+            </span>
+          </label>
+          <label
+            className={`flex items-start gap-3 rounded-xl border-2 p-3 ${f.popupMode === "every" ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${f.keep && f.popupMode !== "every" ? "border-brand bg-brand-soft" : "border-line"}`}
+          >
+            <input type="radio" name="keep" className="mt-1 h-4 w-4" disabled={f.popupMode === "every"} checked={f.keep && f.popupMode !== "every"} onChange={() => set("keep", true)} />
+            <span>
+              <span className="block text-sm font-bold">♾ Keep without end date</span>
+              <span className="block text-xs text-ink-2">
+                {f.popupMode === "every" ? "Not possible for notices that pop up every time." : "Stays in the Notices tab until you delete it (e.g. emergency contacts)."}
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      <label className="mt-4 flex items-center gap-2 text-sm font-semibold">
+        <input type="checkbox" className="h-5 w-5" checked={f.important} onChange={(e) => set("important", e.target.checked)} />
+        Mark as important (red)
+      </label>
+
       <div className="mt-4 flex gap-2">
         {notice && (
           <button
@@ -153,12 +229,13 @@ function NoticeSheet({ notice, onClose }: { notice: Notice | null; onClose: () =
         )}
         <button
           className="btn btn-primary flex-1"
-          disabled={!(f.titleEn || f.titleTe) || !(f.bodyEn || f.bodyTe)}
+          disabled={!(f.titleEn || f.titleTe) || !(f.bodyEn || f.bodyTe) || dateMissing}
           onClick={save}
         >
           {notice ? "Save notice" : "Post notice"}
         </button>
       </div>
+      {dateMissing && <p className="mt-2 text-center text-xs font-semibold text-crit-ink">Pick the notice date, or choose “Keep without end date”.</p>}
     </Sheet>
   );
 }
