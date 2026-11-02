@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
+  /* Light mode only, even when the phone is in dark mode. */
+  color-scheme: only light;
   --bg: #f4f3ef;
   --surface: #fcfcfb;
   --surface-2: #f0efec;
@@ -29,39 +30,6 @@
   --series-2: #eb6834;
   --series-out: #e34948;
   --neutral-bar: #b9b7ae;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #0d0d0d;
-    --surface: #1a1a19;
-    --surface-2: #242422;
-    --ink: #f0efec;
-    --ink-2: #c3c2b7;
-    --muted: #96948d;
-    --line: rgba(255, 255, 255, 0.1);
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --brand: #3cb4a5;
-    --brand-ink: #062a26;
-    --brand-soft: #12302c;
-    --header-bg: #10403a;
-    --header-ink: #e8f5f2;
-    --good: #0ca30c;
-    --good-ink: #3fcf3f;
-    --good-bg: #122a14;
-    --warn: #fab219;
-    --warn-ink: #fab219;
-    --warn-bg: #33270b;
-    --crit: #d03b3b;
-    --crit-ink: #ff8f8f;
-    --crit-bg: #3a1515;
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-out: #e66767;
-    --neutral-bar: #5a5954;
-  }
 }
 
 @theme inline {

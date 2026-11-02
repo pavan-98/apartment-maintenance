@@ -74,20 +74,105 @@ export function normalizeDB(db: DB): DB {
 
 const T = "2026-09-01T09:00:00.000Z";
 
-/** September 2026 from the maintenance book, as sample data. */
+const day = (m: string, d: number) => `${m}-${String(d).padStart(2, "0")}`;
+
+/**
+ * Made-up October and November 2026, so History has something to show:
+ * - October: 202 still unpaid (2 months due), 401 paid only ₹1,000,
+ *   a motor repair, and staircase painting collected separately.
+ * - November (in progress): 6 flats paid so far, two early expenses.
+ */
+function addSampleOctoberNovember(db: DB) {
+  const oct = "2026-10";
+  const octPartial: Record<string, number> = { "401": 1000 };
+  const octPaid = FLAT_IDS.filter((id) => id !== "202");
+  for (const [i, flatId] of octPaid.entries()) {
+    db.payments.push({
+      id: `demo-p-oct-${flatId}`,
+      flatId,
+      month: oct,
+      amount: octPartial[flatId] ?? 1500,
+      date: day(oct, Math.min(28, 2 + i)),
+      mode: i % 2 === 0 ? "upi" : "cash",
+      createdAt: T,
+    });
+  }
+  const octAmounts: Record<string, number> = { "t-power": 6210 };
+  for (const [i, t] of DEFAULT_TEMPLATES.entries()) {
+    db.expenses.push({
+      id: `demo-e-oct-${t.id}`,
+      month: oct,
+      category: t.category,
+      label: t.label,
+      amount: octAmounts[t.id] ?? t.amount,
+      date: day(oct, 24 + (i % 5)),
+      createdAt: T,
+    });
+  }
+  db.expenses.push({
+    id: "demo-e-oct-motor",
+    month: oct,
+    category: "Repairs",
+    label: "Water motor repair",
+    amount: 2400,
+    date: day(oct, 14),
+    note: "Motor coil rewinding",
+    createdAt: T,
+  });
+  const paintUnpaid = new Set(["102", "202", "503", "301"]);
+  db.collections.push({
+    id: "demo-c-paint",
+    month: oct,
+    title: "Staircase painting",
+    description: "Painting of staircase walls and railings",
+    perFlatAmount: 600,
+    exemptFlats: [],
+    createdAt: T,
+    costs: [
+      { id: "demo-cc-p1", label: "Paint and primer", amount: 4700 },
+      { id: "demo-cc-p2", label: "Painter labour (2 days)", amount: 3500 },
+    ],
+    payments: FLAT_IDS.filter((id) => !paintUnpaid.has(id)).map((flatId, i) => ({
+      id: `demo-cp-paint-${flatId}`,
+      flatId,
+      amount: 600,
+      date: day(oct, 16 + (i % 8)),
+      mode: "cash" as const,
+    })),
+  });
+
+  const nov = "2026-11";
+  for (const [i, flatId] of ["101", "103", "203", "302", "303", "502"].entries()) {
+    db.payments.push({
+      id: `demo-p-nov-${flatId}`,
+      flatId,
+      month: nov,
+      amount: 1500,
+      date: day(nov, 1 + (i % 2)),
+      mode: i % 2 === 0 ? "upi" : "cash",
+      createdAt: T,
+    });
+  }
+  db.expenses.push(
+    { id: "demo-e-nov-lift", month: nov, category: "Lift maintenance", label: "Lift maintenance", amount: 1500, date: day(nov, 1), createdAt: T },
+    { id: "demo-e-nov-clean", month: nov, category: "Cleaning material", label: "Material for cleaning", amount: 500, date: day(nov, 2), createdAt: T },
+  );
+}
+
+/** September 2026 from the maintenance book, plus made-up October and November, as sample data. */
 export function demoDB(now: Date = new Date()): DB {
   const db = freshDB(BOOK_FLATS, now);
   const month = "2026-09";
-  db.settings = { ...db.settings, isDemo: true, demoMonth: month, startMonth: month };
+  db.settings = { ...db.settings, isDemo: true, startMonth: month };
 
   const maintenanceUnpaid = new Set(["102", "202"]);
-  let day = 3;
+  const startDay = 3;
   db.payments = FLAT_IDS.filter((id) => !maintenanceUnpaid.has(id)).map((flatId, i) => ({
     id: `demo-p-${flatId}`,
     flatId,
     month,
     amount: 1500,
-    date: `2026-09-${String(Math.min(28, day + i)).padStart(2, "0")}`,
+    date: `2026-09-${String(Math.min(28, startDay + i)).padStart(2, "0")}`,
     mode: i % 3 === 0 ? "upi" : "cash",
     createdAt: T,
   }));
@@ -127,6 +212,8 @@ export function demoDB(now: Date = new Date()): DB {
       })),
     },
   ];
+
+  addSampleOctoberNovember(db);
 
   db.rules = [
     {
@@ -168,7 +255,7 @@ export function demoDB(now: Date = new Date()): DB {
   ];
 
   db.audit = [
-    { id: "demo-a-1", at: T, by: "System", action: "Sample data", detail: "Loaded September 2026 from the maintenance book" },
+    { id: "demo-a-1", at: T, by: "System", action: "Sample data", detail: "Loaded September 2026 from the maintenance book, plus sample October and November" },
   ];
   return db;
 }

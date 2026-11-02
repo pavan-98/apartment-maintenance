@@ -5,17 +5,23 @@ import { inr, type MonthSummary } from "@/lib/calc";
 import { monthLabel } from "@/lib/dates";
 import { useApp } from "./AppProvider";
 
+/** Round a step up to 1, 2, 2.5 or 5 × 10^k so axis labels are round numbers. */
+function niceStep(raw: number): number {
+  if (raw <= 0) return 250;
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+}
+
+/** Axis maximum with four equal, round steps. */
 function niceMax(v: number): number {
-  if (v <= 0) return 1000;
-  const p = Math.pow(10, Math.floor(Math.log10(v)));
-  const n = v / p;
-  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
-  return step * p;
+  return niceStep(v / 4) * 4;
 }
 
 function short(n: number): string {
   const a = Math.abs(n);
-  const s = a >= 100000 ? `${(a / 100000).toFixed(a % 100000 ? 1 : 0)}L` : a >= 1000 ? `${Math.round(a / 1000)}k` : String(a);
+  const fmt = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+  const s = a >= 100000 ? `${fmt(a / 100000)}L` : a >= 1000 ? `${fmt(a / 1000)}k` : String(Math.round(a));
   return (n < 0 ? "−" : "") + s;
 }
 
@@ -110,7 +116,7 @@ export function HistoryTab({ summaries, onPickMonth }: { summaries: MonthSummary
           </svg>
           {tip && (
             <div
-              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg"
+              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg"
               style={{ left: Math.min(Math.max(tip.x, 80), (wrap.current?.clientWidth ?? 300) - 80), top: tip.y - 6 }}
             >
               <p className="mb-1 font-bold">{monthLabel(tip.s.month, lang)}</p>

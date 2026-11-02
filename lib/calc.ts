@@ -10,13 +10,16 @@ export function maintenanceDue(db: DB, month: MonthKey): number {
 /** Months the app shows, oldest first. */
 export function activeMonths(db: DB, now: Date = new Date()): MonthKey[] {
   const s = db.settings;
-  if (s.isDemo && s.demoMonth) return [s.demoMonth];
   let last = currentMonth(now);
   const dataMonths = [
     ...db.payments.map((p) => p.month),
     ...db.expenses.map((e) => e.month),
     ...db.collections.map((c) => c.month),
   ];
+  if (s.isDemo) {
+    // Sample data: show exactly the sample months, whatever today's date is.
+    last = s.startMonth;
+  }
   for (const m of dataMonths) if (compareMonths(m, last) > 0) last = m;
   if (compareMonths(s.startMonth, last) > 0) return [s.startMonth];
   return monthRange(s.startMonth, last);

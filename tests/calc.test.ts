@@ -32,10 +32,13 @@ describe("September 2026 sample (from the book)", () => {
     expect(s.closing).toBe(-1151);
   });
 
-  it("shows unpaid flats in the red alert", () => {
+  it("shows unpaid flats in the red alert, including arrears from October", () => {
     const d = duesReport(db, NOW);
-    expect(d.overdue.map((x) => x.flat.id)).toEqual(["102", "202"]);
-    expect(d.overdueTotal).toBe(3000);
+    expect(d.overdue.map((x) => x.flat.id)).toEqual(["102", "202", "401"]);
+    expect(d.overdue.find((x) => x.flat.id === "202")?.months.map((m) => m.month)).toEqual(["2026-09", "2026-10"]);
+    expect(d.overdueTotal).toBe(5000);
+    // November is still within the grace period (due by the 10th).
+    expect(d.upcoming).toHaveLength(9);
   });
 
   it("hides phone numbers from residents", () => {
@@ -117,7 +120,22 @@ describe("balances and actions", () => {
     expect(() => applyAction(db, { type: "expense.add", month: "2026-11", category: "X", label: "X", amount: -5 }, "A", NOW)).toThrow();
   });
 
-  it("only shows the demo month while sample data is loaded", () => {
-    expect(activeMonths(demoDB(NOW), NOW)).toEqual(["2026-09"]);
+  it("shows the three sample months, whatever today's date is", () => {
+    expect(activeMonths(demoDB(NOW), NOW)).toEqual(["2026-09", "2026-10", "2026-11"]);
+    expect(activeMonths(demoDB(NOW), new Date("2027-03-01T06:00:00Z"))).toEqual(["2026-09", "2026-10", "2026-11"]);
+  });
+
+  it("carries balances through the sample October and November", () => {
+    const [sep, oct, nov] = allSummaries(demoDB(NOW), NOW);
+    expect(sep.closing).toBe(-1151);
+    expect(oct.opening).toBe(-1151);
+    expect(oct.maintenanceCollected).toBe(20500); // 13 × 1,500 + 401 part-paid 1,000
+    expect(oct.collectionIncome).toBe(6600);
+    expect(oct.spent).toBe(18210 + 8200);
+    expect(oct.closing).toBe(-461);
+    expect(oct.flats.find((f) => f.flat.id === "401")?.status).toBe("partial");
+    expect(nov.opening).toBe(-461);
+    expect(nov.paidCount).toBe(6);
+    expect(nov.closing).toBe(6539);
   });
 });

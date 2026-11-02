@@ -63,7 +63,8 @@ describe("WhatsApp sending", () => {
   it("reminds only flats with dues, with their amounts", () => {
     const db = withManjulaPhones(demoDB(NOW));
     const msgs = reminderMessages(db, duesReport(db, NOW), { includeUpcoming: false, audience: "owners", lang: "both", url: "https://x" });
-    expect(msgs.map((m) => m.recipient.flats[0])).toEqual(["102", "202"]);
+    expect(msgs.map((m) => m.recipient.flats[0])).toEqual(["102", "202", "401"]);
+    expect(msgs.find((m) => m.recipient.flats[0] === "202")?.text).toContain("₹3,000");
     expect(msgs[0].text).toContain("Ramalakshmi");
     expect(msgs[0].text).toContain("₹1,500");
     expect(msgs[0].text).toContain("నమస్తే");
