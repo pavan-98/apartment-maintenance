@@ -1,5 +1,5 @@
 // Offline support: network first, falling back to the last cached copy.
-const CACHE = "apt-v2";
+const CACHE = "apt-v3";
 const SHELL = ["/", "/manifest.webmanifest", "/icon-192.png"];
 
 self.addEventListener("install", (e) => {

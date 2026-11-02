@@ -6,7 +6,7 @@ import { writeFileSync } from "node:fs";
 
 const svg = (pad) => `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="${pad ? 0 : 112}" fill="#0e6f66"/>
+  <rect width="512" height="512" rx="${pad ? 0 : 112}" fill="#1e3a8a"/>
   <g transform="translate(256 262) scale(${pad ? 0.74 : 0.92}) translate(-256 -262)">
     <path d="M150 420V150l106-44 106 44v270" fill="#ffffff" opacity="0.14"/>
     <path d="M150 420V150l106-44 106 44v270" fill="none" stroke="#fff" stroke-width="22" stroke-linejoin="round"/>

@@ -3,19 +3,19 @@
 :root {
   /* Light mode only, even when the phone is in dark mode. */
   color-scheme: only light;
-  --bg: #f4f3ef;
-  --surface: #fcfcfb;
-  --surface-2: #f0efec;
-  --ink: #0b0b0b;
-  --ink-2: #52514e;
-  --muted: #7a7873;
-  --line: rgba(11, 11, 11, 0.1);
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
-  --brand: #0e6f66;
+  --bg: #f1f4f9;
+  --surface: #ffffff;
+  --surface-2: #eef2f7;
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --muted: #64748b;
+  --line: rgba(15, 23, 42, 0.1);
+  --grid: #e2e8f0;
+  --axis: #cbd5e1;
+  --brand: #1d4ed8;
   --brand-ink: #ffffff;
-  --brand-soft: #e1f1ee;
-  --header-bg: #0e6f66;
+  --brand-soft: #e7eefc;
+  --header-bg: #1e3a8a;
   --header-ink: #ffffff;
   --good: #0ca30c;
   --good-ink: #006300;
@@ -29,7 +29,7 @@
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-out: #e34948;
-  --neutral-bar: #b9b7ae;
+  --neutral-bar: #b4bfcf;
 }
 
 @theme inline {

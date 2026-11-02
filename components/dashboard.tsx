@@ -81,9 +81,27 @@ export function DuesAlert({ db, dues }: { db: DB; dues: DuesReport }) {
   const { t, lang } = useApp();
   const [open, setOpen] = useState(false);
 
+  const upcoming =
+    dues.upcoming.length && dues.graceMonth ? (
+      <section className="rounded-2xl border border-warn bg-warn-bg p-4">
+        <h2 className="flex items-center gap-2 text-base font-bold text-warn-ink">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+          {t("upcomingTitle", { month: monthLabel(dues.graceMonth!, lang), day: dues.dueDay })}
+        </h2>
+        <p className="mt-1 text-sm text-warn-ink">
+          {dues.upcoming.map((d) => d.flat.id).join(", ")} · <strong className="tnum">{inr(dues.upcomingTotal)}</strong>
+        </p>
+      </section>
+    ) : null;
+
+
   if (dues.overdue.length) {
     const n = dues.overdue.length;
     return (
+      <>
       <section role="alert" className="overflow-hidden rounded-2xl border-2 border-crit bg-crit-bg">
         <div className="flex items-start gap-3 p-4">
           <span className="pulse mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-crit text-white" aria-hidden>
@@ -139,25 +157,12 @@ export function DuesAlert({ db, dues }: { db: DB; dues: DuesReport }) {
           </div>
         )}
       </section>
+      {upcoming}
+      </>
     );
   }
 
-  if (dues.upcoming.length && dues.graceMonth) {
-    return (
-      <section className="rounded-2xl border border-warn bg-warn-bg p-4">
-        <h2 className="flex items-center gap-2 text-base font-bold text-warn-ink">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-          </svg>
-          {t("upcomingTitle", { month: monthLabel(dues.graceMonth, lang), day: dues.dueDay })}
-        </h2>
-        <p className="mt-1 text-sm text-warn-ink">
-          {dues.upcoming.map((d) => d.flat.id).join(", ")} · <strong className="tnum">{inr(dues.upcomingTotal)}</strong>
-        </p>
-      </section>
-    );
-  }
+  if (upcoming) return upcoming;
 
   return (
     <section className="flex items-center gap-2 rounded-2xl border border-good/40 bg-good-bg p-4 text-good-ink">
