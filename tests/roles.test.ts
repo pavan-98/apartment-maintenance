@@ -66,7 +66,7 @@ describe("manager accounts", () => {
 });
 
 describe("manager permissions", () => {
-  const db = demoDB(NOW); // sample months Sep–Nov 2026; today is November
+  const db = demoDB(NOW); // sample months Oct–Nov 2026; today is November
   const can = (a: Action) => checkPermission(db, "manager", a, NOW);
 
   it("allows the current month", () => {
@@ -79,17 +79,17 @@ describe("manager permissions", () => {
 
   it("blocks changes to past months", () => {
     expect(can({ type: "payment.markAll", flatIds: ["102"], month: "2026-10", date: "2026-11-02", mode: "cash" })).toMatch(/current month/);
-    expect(can({ type: "payment.delete", id: "demo-p-101" })).toMatch(/current month/);
+    expect(can({ type: "payment.delete", id: "demo-p-oct-101" })).toMatch(/current month/);
     expect(can({ type: "expense.delete", id: "demo-e-oct-dussehra" })).toMatch(/current month/);
     expect(can({ type: "expense.add", month: "2026-10", category: "Misc", label: "x", amount: 1 })).toMatch(/current month/);
-    expect(can({ type: "collection.payment.add", id: "demo-c-pest", flatId: "102", amount: 1400, date: "2026-11-02", mode: "cash" })).toMatch(/current month/);
+    expect(can({ type: "collection.create", month: "2026-10", title: "Old work", perFlatAmount: 100 })).toMatch(/current month/);
   });
 
   it("allows a late payment for old dues, but only what is pending and dated this month", () => {
-    const late = { type: "payment.add" as const, flatId: "202", month: "2026-09", date: "2026-11-02", mode: "cash" as const };
+    const late = { type: "payment.add" as const, flatId: "202", month: "2026-10", date: "2026-11-02", mode: "cash" as const };
     expect(can({ ...late, amount: 1500 })).toBeNull();
     expect(can({ ...late, amount: 2000 })).toMatch(/pending amount/);
-    expect(can({ ...late, amount: 1500, date: "2026-09-30" })).toMatch(/dated this month/);
+    expect(can({ ...late, amount: 1500, date: "2026-10-30" })).toMatch(/dated this month/);
     expect(can({ ...late, flatId: "101", amount: 100 })).toMatch(/already fully paid/);
   });
 
@@ -105,7 +105,7 @@ describe("manager permissions", () => {
 
   it("lets the main admin do anything", () => {
     expect(checkPermission(db, "owner", { type: "data.clearDemo" }, NOW)).toBeNull();
-    expect(checkPermission(db, "owner", { type: "payment.delete", id: "demo-p-101" }, NOW)).toBeNull();
+    expect(checkPermission(db, "owner", { type: "payment.delete", id: "demo-p-oct-101" }, NOW)).toBeNull();
   });
 });
 

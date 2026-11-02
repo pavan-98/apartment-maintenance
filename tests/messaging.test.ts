@@ -64,9 +64,9 @@ describe("WhatsApp sending", () => {
     const db = withManjulaPhones(demoDB(NOW));
     const msgs = reminderMessages(db, duesReport(db, NOW), { includeUpcoming: false, audience: "owners", lang: "both", url: "https://x" });
     expect(msgs.map((m) => m.recipient.flats[0])).toEqual(["102", "202"]);
-    expect(msgs.find((m) => m.recipient.flats[0] === "202")?.text).toContain("₹3,000");
+    expect(msgs.find((m) => m.recipient.flats[0] === "202")?.text).toContain("Bhanu Reddy");
     expect(msgs[0].text).toContain("Ramabai");
-    expect(msgs[0].text).toContain("₹3,000 (September 2026, October 2026)");
+    expect(msgs[0].text).toContain("₹1,500 (October 2026)");
     expect(msgs[0].text).toContain("నమస్తే");
   });
 

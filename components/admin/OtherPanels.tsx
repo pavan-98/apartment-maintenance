@@ -258,7 +258,7 @@ export function SettingsPanel({ db, month }: { db: DB; month: MonthKey }) {
         <section className="rounded-2xl border-2 border-crit bg-crit-bg p-4">
           <h2 className="text-lg font-bold text-crit-ink">Sample data is loaded</h2>
           <p className="mt-1 text-sm text-crit-ink">
-            The app is showing sample data for a trial run (September and October 2026 from the book, plus a made-up November). When you are ready, remove it to start fresh from{" "}
+            The app is showing sample data for a trial run (October 2026 from the book, plus a made-up November where only 501 has paid). When you are ready, remove it to start fresh from{" "}
             <strong>this month with ₹0</strong>. Flat owner names and phone numbers are kept; payments, expenses, works, rules and notices are removed.
           </p>
           <button
@@ -342,11 +342,11 @@ export function SettingsPanel({ db, month }: { db: DB; month: MonthKey }) {
       {!s.isDemo && (
         <section className="card p-4">
           <SectionTitle>Trial data</SectionTitle>
-          <p className="text-sm text-ink-2">Load the sample data again (September–November 2026) to show someone how the app works. This replaces all current records.</p>
+          <p className="text-sm text-ink-2">Load the sample data again (October–November 2026) to show someone how the app works. This replaces all current records.</p>
           <button
             className="btn mt-3 text-crit-ink"
             onClick={async () => {
-              if (confirm("This will REPLACE all real records with the sample data (September–November 2026). Continue?")) await run({ type: "data.loadDemo" }, "Sample data loaded");
+              if (confirm("This will REPLACE all real records with the sample data (October–November 2026). Continue?")) await run({ type: "data.loadDemo" }, "Sample data loaded");
             }}
           >
             Load sample data

@@ -90,7 +90,7 @@ function addDaysISO(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-const T = "2026-09-01T09:00:00.000Z";
+const T = "2026-10-01T09:00:00.000Z";
 
 const day = (m: string, d: number) => `${m}-${String(d).padStart(2, "0")}`;
 
@@ -124,79 +124,17 @@ function addOctoberFromBook(db: DB) {
   e("dussehra", "Festival", "Dussehra – given to Joga Rao", 2000, 1, "Please check with Joga Rao");
 }
 
-/** Made-up November 2026 (in progress), so the current month has something to show. */
+/** Made-up November 2026, just started: only flat 501 has paid, no expenses yet. */
 function addSampleNovember(db: DB) {
   const nov = "2026-11";
-  for (const [i, flatId] of ["101", "103", "203", "302", "303", "502"].entries()) {
-    db.payments.push({
-      id: `demo-p-nov-${flatId}`,
-      flatId,
-      month: nov,
-      amount: 1500,
-      date: day(nov, 1 + (i % 2)),
-      mode: i % 2 === 0 ? "upi" : "cash",
-      createdAt: T,
-    });
-  }
-  db.expenses.push(
-    { id: "demo-e-nov-lift", month: nov, category: "Lift maintenance", label: "Lift maintenance", amount: 1500, date: day(nov, 1), createdAt: T },
-    { id: "demo-e-nov-clean", month: nov, category: "Cleaning material", label: "Material for cleaning", amount: 500, date: day(nov, 2), createdAt: T },
-  );
+  db.payments.push({ id: "demo-p-nov-501", flatId: "501", month: nov, amount: 1500, date: day(nov, 1), mode: "upi", createdAt: T });
 }
 
-/** September and October 2026 from the maintenance book, plus a made-up November in progress, as sample data. */
+/** October 2026 from the maintenance book, plus a made-up November where only 501 has paid, as sample data. */
 export function demoDB(now: Date = new Date()): DB {
   const db = freshDB(BOOK_FLATS, now);
-  const month = "2026-09";
-  db.settings = { ...db.settings, isDemo: true, startMonth: month };
-
-  const maintenanceUnpaid = new Set(["102", "202"]);
-  const startDay = 3;
-  db.payments = FLAT_IDS.filter((id) => !maintenanceUnpaid.has(id)).map((flatId, i) => ({
-    id: `demo-p-${flatId}`,
-    flatId,
-    month,
-    amount: 1500,
-    date: `2026-09-${String(Math.min(28, startDay + i)).padStart(2, "0")}`,
-    mode: i % 3 === 0 ? "upi" : "cash",
-    createdAt: T,
-  }));
-
-  db.expenses = DEFAULT_TEMPLATES.map((t, i) => ({
-    id: `demo-e-${t.id}`,
-    month,
-    category: t.category,
-    label: t.label,
-    amount: t.amount,
-    date: `2026-09-${String(25 + (i % 4)).padStart(2, "0")}`,
-    createdAt: T,
-  }));
-
-  const pestUnpaid = new Set(["102", "201", "202"]);
-  db.collections = [
-    {
-      id: "demo-c-pest",
-      month,
-      title: "Pest control",
-      description: "Whole-building pest control treatment",
-      perFlatAmount: 1400,
-      exemptFlats: [],
-      createdAt: T,
-      costs: [
-        { id: "demo-cc-1", label: "Material (4,500 × 3)", amount: 13500 },
-        { id: "demo-cc-2", label: "Cement", amount: 300 },
-        { id: "demo-cc-3", label: "Liquid material", amount: 486 },
-        { id: "demo-cc-4", label: "Labour charges", amount: 7000 },
-      ],
-      payments: FLAT_IDS.filter((id) => !pestUnpaid.has(id)).map((flatId, i) => ({
-        id: `demo-cp-${flatId}`,
-        flatId,
-        amount: 1400,
-        date: `2026-09-${String(12 + (i % 10)).padStart(2, "0")}`,
-        mode: "cash" as const,
-      })),
-    },
-  ];
+  // Sample starts at October 2026 with ₹0 in hand (no carry-over from earlier pages).
+  db.settings = { ...db.settings, isDemo: true, startMonth: "2026-10" };
 
   addOctoberFromBook(db);
   addSampleNovember(db);
@@ -295,7 +233,7 @@ export function demoDB(now: Date = new Date()): DB {
   ];
 
   db.audit = [
-    { id: "demo-a-1", at: T, by: "System", action: "Sample data", detail: "Loaded September and October 2026 from the maintenance book, plus a sample November" },
+    { id: "demo-a-1", at: T, by: "System", action: "Sample data", detail: "Loaded October 2026 from the maintenance book, plus a sample November (only 501 paid)" },
   ];
   return db;
 }

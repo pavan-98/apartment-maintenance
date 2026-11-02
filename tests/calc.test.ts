@@ -5,40 +5,45 @@ import { applyAction, ActionError, publicView } from "@/lib/actions";
 
 const NOW = new Date("2026-11-02T06:00:00Z");
 
-describe("September 2026 sample (from the book)", () => {
+describe("Sample data: October 2026 from the book, November with only 501 paid", () => {
   const db = demoDB(NOW);
-  const s = monthSummary(db, "2026-09", NOW);
+  const [oct, nov] = allSummaries(db, NOW);
 
-  it("matches the book's maintenance totals", () => {
-    expect(s.maintenanceCollected).toBe(19500);
-    expect(s.paidCount).toBe(13);
-    expect(s.flats.filter((f) => f.status === "unpaid").map((f) => f.flat.id)).toEqual(["102", "202"]);
+  it("shows just October and November, whatever today's date is", () => {
+    expect(activeMonths(db, NOW)).toEqual(["2026-10", "2026-11"]);
+    expect(activeMonths(db, new Date("2027-03-01T06:00:00Z"))).toEqual(["2026-10", "2026-11"]);
   });
 
-  it("matches the book's expenses", () => {
-    expect(s.regularExpenses).toBe(16165);
-    expect(s.collectionCosts).toBe(21286);
+  it("matches the book's October page", () => {
+    expect(oct.opening).toBe(0); // clean slate: no carry-over from earlier pages
+    expect(oct.maintenanceCollected).toBe(19500); // 13 flats
+    expect(oct.flats.filter((f) => f.status === "unpaid").map((f) => f.flat.id)).toEqual(["102", "202"]);
+    expect(oct.regularExpenses).toBe(20100); // 13,100 + 5,000 + 2,000 Dussehra
+    // Book: 19,500 − 18,100 = 1,400, then −2,000 for Dussehra.
+    expect(oct.closing).toBe(1400 - 2000);
   });
 
-  it("tracks pest control separately from maintenance", () => {
-    const pest = s.collections[0];
-    expect(pest.collected).toBe(16800);
-    expect(pest.pendingFlats.map((p) => p.flat.id)).toEqual(["102", "201", "202"]);
+  it("November: only 501 has paid, and October's balance is carried in", () => {
+    expect(nov.opening).toBe(-600);
+    expect(nov.paidCount).toBe(1);
+    expect(nov.flats.find((f) => f.status === "paid")?.flat.id).toBe("501");
+    expect(nov.spent).toBe(0);
+    expect(nov.closing).toBe(900);
   });
 
-  it("starts from ₹0 (no carry-over) and ends at the book's total without the old shortage", () => {
-    // Book: −9,472 including −8,321 carried in, i.e. −1,151 for September alone.
-    expect(s.opening).toBe(0);
-    expect(s.closing).toBe(-1151);
-  });
-
-  it("shows unpaid flats in the red alert, including arrears from October", () => {
+  it("before the 10th: October's unpaid flats are red, November's are 'yet to pay'", () => {
     const d = duesReport(db, NOW);
     expect(d.overdue.map((x) => x.flat.id)).toEqual(["102", "202"]);
-    expect(d.overdue.find((x) => x.flat.id === "202")?.months.map((m) => m.month)).toEqual(["2026-09", "2026-10"]);
-    expect(d.overdueTotal).toBe(6000);
-    // November is still within the grace period (due by the 10th).
-    expect(d.upcoming).toHaveLength(9);
+    expect(d.overdueTotal).toBe(3000);
+    expect(d.upcoming).toHaveLength(14);
+  });
+
+  it("after the 10th: everyone except 501 is in the red alert", () => {
+    const d = duesReport(db, new Date("2026-11-15T06:00:00Z"));
+    expect(d.overdue).toHaveLength(14);
+    expect(d.overdue.find((x) => x.flat.id === "102")?.months.map((m) => m.month)).toEqual(["2026-10", "2026-11"]);
+    expect(d.overdueTotal).toBe(3000 + 14 * 1500);
+    expect(d.upcoming).toEqual([]);
   });
 
   it("hides phone numbers from residents", () => {
@@ -120,23 +125,7 @@ describe("balances and actions", () => {
     expect(() => applyAction(db, { type: "expense.add", month: "2026-11", category: "X", label: "X", amount: -5 }, "A", NOW)).toThrow();
   });
 
-  it("shows the three sample months, whatever today's date is", () => {
-    expect(activeMonths(demoDB(NOW), NOW)).toEqual(["2026-09", "2026-10", "2026-11"]);
-    expect(activeMonths(demoDB(NOW), new Date("2027-03-01T06:00:00Z"))).toEqual(["2026-09", "2026-10", "2026-11"]);
-  });
 
-  it("matches the book's October page and carries into November", () => {
-    const [sep, oct, nov] = allSummaries(demoDB(NOW), NOW);
-    expect(sep.closing).toBe(-1151);
-    expect(oct.opening).toBe(-1151);
-    expect(oct.maintenanceCollected).toBe(19500); // 13 flats; 102 and 202 unpaid
-    expect(oct.flats.filter((f) => f.status === "unpaid").map((f) => f.flat.id)).toEqual(["102", "202"]);
-    expect(oct.regularExpenses).toBe(20100); // 13,100 + 5,000 + 2,000 Dussehra
-    // Book: 19,500 − 18,100 = 1,400, then −2,000 for Dussehra.
-    expect(oct.closing - oct.opening).toBe(1400 - 2000);
-    expect(oct.closing).toBe(-1751);
-    expect(nov.opening).toBe(-1751);
-    expect(nov.paidCount).toBe(6);
-    expect(nov.closing).toBe(5249);
-  });
+
+
 });

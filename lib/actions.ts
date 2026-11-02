@@ -545,7 +545,7 @@ export function applyAction(input: DB, action: Action, by: string, now: Date = n
       const demo = demoDB(now);
       demo.version = db.version;
       demo.users = db.users;
-      demo.audit.unshift({ id: uid("a"), at, by, action: "Sample data", detail: "Loaded sample data (September–November 2026)" });
+      demo.audit.unshift({ id: uid("a"), at, by, action: "Sample data", detail: "Loaded sample data (October–November 2026)" });
       return demo;
     }
     default:
