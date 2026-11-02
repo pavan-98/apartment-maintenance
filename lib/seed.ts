@@ -56,7 +56,19 @@ export function freshDB(flats: Flat[] = BOOK_FLATS, now: Date = new Date()): DB 
     expenses: [],
     collections: [],
     rules: [],
+    notices: [],
     audit: [],
+  };
+}
+
+/** Fill in fields added in later versions so older saved data keeps working. */
+export function normalizeDB(db: DB): DB {
+  return {
+    ...db,
+    notices: db.notices ?? [],
+    rules: db.rules ?? [],
+    collections: db.collections ?? [],
+    audit: db.audit ?? [],
   };
 }
 
@@ -136,6 +148,20 @@ export function demoDB(now: Date = new Date()): DB {
       id: "demo-r-3",
       title: "Lift usage",
       body: "Children below 10 should use the lift only with an adult. Do not use the lift for heavy construction material.",
+      createdAt: T,
+      updatedAt: T,
+    },
+  ];
+
+  db.notices = [
+    {
+      id: "demo-n-1",
+      titleEn: "Water tank cleaning on Sunday",
+      titleTe: "ఆదివారం వాటర్ ట్యాంక్ శుభ్రత",
+      bodyEn: "The overhead water tank will be cleaned this Sunday from 9 AM to 1 PM. There will be no water supply during this time. Please store water in advance.",
+      bodyTe: "ఈ ఆదివారం ఉదయం 9 నుండి మధ్యాహ్నం 1 గంట వరకు పైన ఉన్న వాటర్ ట్యాంక్ శుభ్రం చేయబడుతుంది. ఈ సమయంలో నీటి సరఫరా ఉండదు. దయచేసి ముందుగానే నీరు నిల్వ చేసుకోండి.",
+      important: true,
+      popup: true,
       createdAt: T,
       updatedAt: T,
     },

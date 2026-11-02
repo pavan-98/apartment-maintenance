@@ -4,6 +4,7 @@ import type {
   DB,
   Expense,
   ExpenseTemplate,
+  Notice,
   Flat,
   PayMode,
   Payment,
@@ -12,12 +13,17 @@ import type {
   SpecialCollection,
 } from "./types";
 import { isMonthKey, currentMonth } from "./dates";
+import { normalizePhone } from "./phone";
 import { demoDB, freshDB } from "./seed";
 import { inr } from "./calc";
 
 /** Every change an admin can make. Applied on the server, validated, and logged. */
 export type Action =
-  | { type: "flat.update"; flatId: string; owner: string; resident?: string; phone?: string; notes?: string }
+  | { type: "flat.update"; flatId: string; owner: string; resident?: string; phone?: string; residentPhone?: string; notes?: string }
+  | { type: "contacts.save"; contacts: { flatId: string; phone?: string; residentPhone?: string }[] }
+  | { type: "notice.add"; notice: NoticeInput }
+  | { type: "notice.update"; id: string; notice: NoticeInput }
+  | { type: "notice.delete"; id: string }
   | { type: "payment.add"; flatId: string; month: string; amount: number; date: string; mode: PayMode; receivedBy?: string; note?: string }
   | { type: "payment.markAll"; flatIds: string[]; month: string; date: string; mode: PayMode }
   | { type: "payment.delete"; id: string }
@@ -41,6 +47,16 @@ export type Action =
   | { type: "template.save"; templates: ExpenseTemplate[] }
   | { type: "data.clearDemo" }
   | { type: "data.loadDemo" };
+
+export interface NoticeInput {
+  titleEn?: string;
+  titleTe?: string;
+  bodyEn?: string;
+  bodyTe?: string;
+  important?: boolean;
+  popup?: boolean;
+  expiresOn?: string;
+}
 
 export class ActionError extends Error {}
 
@@ -87,6 +103,30 @@ function mode(v: unknown): PayMode {
   return v as PayMode;
 }
 
+function phone(v: unknown, field: string): string | undefined {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s) return undefined;
+  const n = normalizePhone(s);
+  if (!n) throw new ActionError(`${field} doesn’t look like a valid mobile number`);
+  return n;
+}
+
+function noticeFields(n: NoticeInput | undefined) {
+  const x = n ?? {};
+  const titleEn = text(x.titleEn ?? "", "English title", 150, false);
+  const titleTe = text(x.titleTe ?? "", "Telugu title", 150, false);
+  const bodyEn = text(x.bodyEn ?? "", "English notice", 4000, false);
+  const bodyTe = text(x.bodyTe ?? "", "Telugu notice", 4000, false);
+  if (!titleEn && !titleTe) throw new ActionError("Please give the notice a title (English or Telugu)");
+  if (!bodyEn && !bodyTe) throw new ActionError("Please write the notice (English or Telugu)");
+  const expiresOn = x.expiresOn ? date(x.expiresOn, "Show until date") : undefined;
+  return { titleEn, titleTe, bodyEn, bodyTe, important: !!x.important, popup: !!x.popup, expiresOn };
+}
+
+export function noticeTitle(n: Pick<Notice, "titleEn" | "titleTe">): string {
+  return n.titleEn || n.titleTe;
+}
+
 function findFlat(db: DB, id: unknown): Flat {
   const f = db.flats.find((x) => x.id === id);
   if (!f) throw new ActionError("Flat not found");
@@ -123,10 +163,45 @@ export function applyAction(input: DB, action: Action, by: string, now: Date = n
       const before = f.owner;
       f.owner = text(action.owner, "Owner name", 80);
       f.resident = optText(action.resident, "Resident name", 80);
-      f.phone = optText(action.phone, "Phone", 20);
-      if (f.phone && !/^[+\d\s-]{6,20}$/.test(f.phone)) throw new ActionError("Phone number looks invalid");
+      f.phone = phone(action.phone, `Owner phone for ${f.id}`);
+      f.residentPhone = phone(action.residentPhone, `Resident phone for ${f.id}`);
       f.notes = optText(action.notes, "Notes", 300);
       log("Flat updated", `${f.id}: ${before === f.owner ? f.owner : `${before} → ${f.owner}`}`);
+      break;
+    }
+    case "contacts.save": {
+      if (!Array.isArray(action.contacts)) throw new ActionError("Invalid list");
+      let changed = 0;
+      for (const c of action.contacts) {
+        const f = findFlat(db, c.flatId);
+        const p = phone(c.phone, `Owner phone for ${f.id}`);
+        const r = phone(c.residentPhone, `Resident phone for ${f.id}`);
+        if (p !== f.phone || r !== f.residentPhone) changed++;
+        f.phone = p;
+        f.residentPhone = r;
+      }
+      log("Phone numbers updated", `${changed} flat${changed === 1 ? "" : "s"} changed`);
+      break;
+    }
+    case "notice.add": {
+      const n: Notice = { id: uid("n"), ...noticeFields(action.notice), createdAt: at, updatedAt: at };
+      db.notices.unshift(n);
+      log("Notice posted", noticeTitle(n));
+      break;
+    }
+    case "notice.update": {
+      const n = db.notices.find((x) => x.id === action.id);
+      if (!n) throw new ActionError("Notice not found");
+      Object.assign(n, noticeFields(action.notice), { updatedAt: at });
+      if (!n.expiresOn) delete n.expiresOn;
+      log("Notice edited", noticeTitle(n));
+      break;
+    }
+    case "notice.delete": {
+      const n = db.notices.find((x) => x.id === action.id);
+      if (!n) throw new ActionError("Notice not found");
+      db.notices = db.notices.filter((x) => x.id !== n.id);
+      log("Notice removed", noticeTitle(n));
       break;
     }
     case "payment.add": {
@@ -395,7 +470,7 @@ export function applyAction(input: DB, action: Action, by: string, now: Date = n
 export function publicView(db: DB): DB {
   return {
     ...db,
-    flats: db.flats.map(({ phone: _phone, ...f }) => f),
+    flats: db.flats.map(({ phone: _p, residentPhone: _r, notes: _n, ...f }) => f),
     audit: [],
   };
 }

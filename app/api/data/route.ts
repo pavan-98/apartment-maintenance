@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loadDB, storageName } from "@/lib/store";
+import { loadDB, storageName, StorageNotConfigured } from "@/lib/store";
 import { publicView } from "@/lib/actions";
 import { currentAdmin } from "@/lib/auth";
 
@@ -14,6 +14,7 @@ export async function GET() {
     );
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Could not load data. Storage is not set up yet." }, { status: 500 });
+    const msg = e instanceof StorageNotConfigured ? e.message : "Could not load data. Please try again in a minute.";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -11,11 +11,15 @@ import { PaymentsPanel } from "@/components/admin/PaymentsPanel";
 import { ExpensesPanel } from "@/components/admin/ExpensesPanel";
 import { WorksPanel } from "@/components/admin/WorksPanel";
 import { AuditPanel, FlatsPanel, RulesPanel, SettingsPanel } from "@/components/admin/OtherPanels";
+import { ContactsPanel, NoticesPanel, SendPanel, type SendPreset } from "@/components/admin/MessagingPanels";
 
 const TABS = [
   { k: "pay", l: "Maintenance", monthly: true },
   { k: "exp", l: "Expenses", monthly: true },
   { k: "works", l: "Additional works", monthly: true },
+  { k: "notices", l: "Notices" },
+  { k: "send", l: "WhatsApp send" },
+  { k: "phones", l: "Phone numbers" },
   { k: "flats", l: "Flats" },
   { k: "rules", l: "Rules" },
   { k: "settings", l: "Settings", monthly: true },
@@ -27,6 +31,7 @@ export default function AdminPage() {
   const { db, admin, loading, storage } = useApp();
   const [tab, setTab] = useState<TabKey>("pay");
   const [month, setMonth] = useState<string | null>(null);
+  const [sendPreset, setSendPreset] = useState<SendPreset | null>(null);
 
   const months = useMemo(() => {
     if (!db) return [];
@@ -90,6 +95,17 @@ export default function AdminPage() {
             {tab === "pay" && <PaymentsPanel db={db} month={current} />}
             {tab === "exp" && <ExpensesPanel db={db} month={current} />}
             {tab === "works" && <WorksPanel db={db} month={current} />}
+            {tab === "notices" && (
+              <NoticesPanel
+                db={db}
+                onSendToAll={(noticeId) => {
+                  setSendPreset({ kind: "notice", noticeId });
+                  setTab("send");
+                }}
+              />
+            )}
+            {tab === "send" && <SendPanel db={db} preset={sendPreset} goContacts={() => setTab("phones")} />}
+            {tab === "phones" && <ContactsPanel key={db.version} db={db} />}
             {tab === "flats" && <FlatsPanel db={db} />}
             {tab === "rules" && <RulesPanel db={db} />}
             {tab === "settings" && <SettingsPanel key={db.version} db={db} month={current} />}

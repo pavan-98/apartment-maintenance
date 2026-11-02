@@ -3,15 +3,14 @@ import type { DuesReport, MonthSummary } from "./calc";
 import { inr } from "./calc";
 import { monthLabel } from "./dates";
 import { categoryLabel, type Lang } from "./i18n";
+import { waDigits } from "./phone";
 
 export function flatName(f: Flat): string {
   return f.resident ? `${f.owner} / ${f.resident}` : f.owner;
 }
 
 export function whatsappLink(text: string, phone?: string): string {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  const to = digits.length === 10 ? `91${digits}` : digits;
-  return `https://wa.me/${to}?text=${encodeURIComponent(text)}`;
+  return `https://wa.me/${waDigits(phone)}?text=${encodeURIComponent(text)}`;
 }
 
 export function monthSummaryText(db: DB, s: MonthSummary, lang: Lang, url: string): string {

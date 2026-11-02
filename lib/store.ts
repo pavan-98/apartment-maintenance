@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { Redis } from "@upstash/redis";
 import type { DB } from "./types";
-import { demoDB } from "./seed";
+import { demoDB, normalizeDB } from "./seed";
 
 /**
  * Storage: Upstash Redis when its env vars are present (production on Vercel),
@@ -20,10 +20,29 @@ interface Backend {
 const DB_KEY = "apt:db";
 const VER_KEY = "apt:db:version";
 
+/**
+ * Find the Upstash REST credentials. Vercel's Upstash integration adds
+ * KV_REST_API_URL / KV_REST_API_TOKEN, optionally with a custom prefix
+ * (e.g. STORAGE_KV_REST_API_URL); Upstash's own console uses UPSTASH_REDIS_REST_*.
+ */
+export function findRedisEnv(env: Record<string, string | undefined> = process.env): { url: string; token: string } | null {
+  if (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
+    return { url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN };
+  }
+  for (const key of Object.keys(env).sort((a, b) => a.length - b.length)) {
+    if (!key.endsWith("KV_REST_API_URL") && !key.endsWith("REDIS_REST_URL")) continue;
+    const tokenKey = key.replace(/URL$/, "TOKEN");
+    const url = env[key];
+    const token = env[tokenKey];
+    if (url && token) return { url, token };
+  }
+  return null;
+}
+
 function redisBackend(): Backend | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-  if (!url || !token) return null;
+  const creds = findRedisEnv();
+  if (!creds) return null;
+  const { url, token } = creds;
   const redis = new Redis({ url, token, automaticDeserialization: false });
   const CAS = `
     local cur = redis.call('GET', KEYS[2])
@@ -92,21 +111,38 @@ function fileBackend(): Backend {
   };
 }
 
+export class StorageNotConfigured extends Error {
+  constructor() {
+    super(
+      "Database is not connected. In Vercel, open your project → Storage → connect “Upstash for Redis”, then redeploy.",
+    );
+  }
+}
+
 let backend: Backend | null = null;
 function getBackend(): Backend {
-  if (!backend) backend = redisBackend() ?? fileBackend();
+  if (!backend) {
+    const redis = redisBackend();
+    // Vercel's file system is read-only, so a database is required there.
+    if (!redis && process.env.VERCEL) throw new StorageNotConfigured();
+    backend = redis ?? fileBackend();
+  }
   return backend;
 }
 
 export function storageName(): string {
-  return getBackend().name;
+  try {
+    return getBackend().name;
+  } catch {
+    return "none";
+  }
 }
 
 /** Read the database, creating it with the September 2026 sample on first run. */
 export async function loadDB(): Promise<DB> {
   const b = getBackend();
   const { db, version } = await b.read();
-  if (db) return { ...db, version };
+  if (db) return { ...normalizeDB(db), version };
   const seeded = demoDB();
   await b.write({ ...seeded, version: 0 }, 0);
   const again = await b.read();

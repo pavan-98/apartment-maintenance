@@ -76,6 +76,16 @@ const en = {
   next: "Next month",
   monthlyMaint: "Monthly maintenance {amount} per flat",
   collectionsPending: "{title}: {n} flats not paid",
+  notices: "Notices",
+  noNotices: "No notices right now.",
+  noticeLabel: "Notice",
+  gotIt: "OK, got it",
+  nextNotice: "Next notice",
+  posted: "Posted {date}",
+  showUntil: "Until {date}",
+  ofN: "{i} of {n}",
+  print: "Print",
+  shareNotice: "Share",
 } as const;
 
 export type Key = keyof typeof en;
@@ -156,6 +166,16 @@ const te: Record<Key, string> = {
   next: "తర్వాతి నెల",
   monthlyMaint: "ఒక్కో ఫ్లాట్‌కు నెలకు {amount} మెయింటెనెన్స్",
   collectionsPending: "{title}: {n} ఫ్లాట్లు చెల్లించలేదు",
+  notices: "నోటీసులు",
+  noNotices: "ప్రస్తుతం నోటీసులు లేవు.",
+  noticeLabel: "నోటీసు",
+  gotIt: "సరే, చూశాను",
+  nextNotice: "తర్వాతి నోటీసు",
+  posted: "{date} న ప్రకటించారు",
+  showUntil: "{date} వరకు",
+  ofN: "{n} లో {i}",
+  print: "ప్రింట్",
+  shareNotice: "పంపండి",
 };
 
 export const dict: Record<Lang, Record<Key, string>> = { en, te };

@@ -9,6 +9,7 @@ A mobile-friendly web app that replaces the maintenance book for our 15 flats.
 - **Additional works** (pest control, painting, repairs…): per-flat amount, costs, who hasn't paid.
 - **History** tab: collected vs spent per month and the month-end balance, with a table view.
 - **Rules** tab: apartment rules for owners and tenants. New or changed rules get a "New" badge. Share a direct link with `/#rules`.
+- **Notices** in English and Telugu: new notices pop up when residents open the app (until they tap OK) and stay in the Notices tab. Each one can be printed for the notice board or shared on WhatsApp.
 - **Telugu / English** switch, **WhatsApp share** of the monthly summary and reminders, and a printable statement (Print / Save as PDF).
 - **Install app** button in the header. The app never shows an install pop-up on its own; it only installs when someone taps the button. It also works offline with the last loaded data.
 
@@ -16,7 +17,10 @@ A mobile-friendly web app that replaces the maintenance book for our 15 flats.
 - **Maintenance**: one tap per flat to mark paid (or record amount, date, cash/UPI and a note), "Mark all paid", and a different amount for a particular month.
 - **Expenses**: one tap adds the regular monthly items (salary, electricity, GVMC + tank cleaning, lift, cleaning material) with their usual amounts; then edit what changed. You can add any other expense and attach a photo of the bill.
 - **Additional works**: create a work, add its costs, and tap flats as they pay.
-- **Flats**: edit owner and resident names, and WhatsApp numbers (numbers are only visible to admins).
+- **Notices**: write a notice in English and Telugu, choose whether it pops up, set an end date, print it (A4 notice-board format), share it to the group, or send it to each owner.
+- **WhatsApp send**: personal maintenance reminders to every flat with dues (each with their own amounts and months), a notice, or your own message, sent to owners, tenants or both. Someone who owns several flats gets one message. WhatsApp only allows fully automatic bulk sending through its paid Business API, so the app opens each chat with the message ready: tap send, come back, tap "Send to next". Progress is remembered.
+- **Phone numbers**: enter all owners' and tenants' WhatsApp numbers on one screen (only admins can see them).
+- **Flats**: edit owner and resident names.
 - **Rules**: add, edit, reorder, and mark as important.
 - **Settings**: apartment name, maintenance amount, due day, start month, opening balance, carry-forward on/off, the regular expenses list, Excel (CSV) export, print, and **Remove sample data & start fresh**.
 - **History**: every change, with who made it and when.
@@ -25,10 +29,7 @@ A mobile-friendly web app that replaces the maintenance book for our 15 flats.
 The first time the app opens it loads **September 2026 from the book** as a trial run. When you're ready, go to **Admin → Settings → Remove sample data & start fresh**. Flat owner names are kept; everything else is cleared, and the books start from the current month at ₹0 with nothing carried forward.
 
 ## Deploy (free) on Vercel
-1. Go to vercel.com → **Add New → Project** → import this GitHub repository.
-2. In the project, open **Storage → Create / Connect → Upstash for Redis** (free plan) and connect it to the project. This adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically.
-3. Under **Settings → Environment Variables**, add `ADMIN_PASSWORD` (and optionally `AUTH_SECRET`, any long random text).
-4. **Deploy** (or redeploy after adding the variables). Share the link in the apartment WhatsApp group.
+See **[docs/VERCEL_SETUP.md](docs/VERCEL_SETUP.md)** for step-by-step instructions (about 15 minutes). In short: import the repository in Vercel, add `ADMIN_PASSWORD`, connect **Upstash for Redis** from the Storage tab, redeploy, then check `/api/health`.
 
 ## Run locally
 ```bash

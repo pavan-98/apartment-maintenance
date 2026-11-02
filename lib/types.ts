@@ -10,7 +10,8 @@ export interface Flat {
   floor: number;
   owner: string;
   resident?: string; // tenant / person living there, if different from owner
-  phone?: string; // only visible to admins
+  phone?: string; // owner's WhatsApp number — only visible to admins
+  residentPhone?: string; // tenant / resident's number — only visible to admins
   notes?: string;
 }
 
@@ -78,6 +79,22 @@ export interface Rule {
   updatedAt: string;
 }
 
+/** A notice for all residents, written in English and Telugu. */
+export interface Notice {
+  id: string;
+  titleEn: string;
+  titleTe: string;
+  bodyEn: string;
+  bodyTe: string;
+  important?: boolean;
+  /** Show as a pop-up when residents open the app (until they tap OK). */
+  popup: boolean;
+  /** Last day the notice is shown (YYYY-MM-DD); empty = no end date. */
+  expiresOn?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ExpenseTemplate {
   id: string;
   category: string;
@@ -120,5 +137,6 @@ export interface DB {
   expenses: Expense[];
   collections: SpecialCollection[];
   rules: Rule[];
+  notices: Notice[];
   audit: AuditEntry[];
 }

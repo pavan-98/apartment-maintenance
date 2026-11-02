@@ -6,6 +6,7 @@ import { inr } from "@/lib/calc";
 import { monthLabel } from "@/lib/dates";
 import { downloadText, ledgerCSV } from "@/lib/export";
 import { whatsappLink } from "@/lib/share";
+import { formatPhone } from "@/lib/phone";
 import { Sheet } from "../Sheet";
 import { Field, SectionTitle, useAdmin } from "./ui";
 
@@ -28,7 +29,7 @@ export function FlatsPanel({ db }: { db: DB }) {
                 <span className="block truncate font-semibold">{f.owner}</span>
                 <span className="block truncate text-xs text-muted">
                   {f.resident ? `Lives here: ${f.resident}` : "Owner lives here"}
-                  {f.phone && ` · ${f.phone}`}
+                  {f.phone ? ` · ${formatPhone(f.phone)}` : " · no number"}
                 </span>
               </span>
               <span className="text-muted" aria-hidden>✎</span>
@@ -45,7 +46,8 @@ function FlatSheet({ flat, onClose }: { flat: Flat; onClose: () => void }) {
   const { run } = useAdmin();
   const [owner, setOwner] = useState(flat.owner);
   const [resident, setResident] = useState(flat.resident ?? "");
-  const [phone, setPhone] = useState(flat.phone ?? "");
+  const [phone, setPhone] = useState(formatPhone(flat.phone));
+  const [residentPhone, setResidentPhone] = useState(formatPhone(flat.residentPhone));
   const [notes, setNotes] = useState(flat.notes ?? "");
   return (
     <Sheet open onClose={onClose} title={`Flat ${flat.id}`}>
@@ -56,8 +58,11 @@ function FlatSheet({ flat, onClose }: { flat: Flat; onClose: () => void }) {
         <Field label="Resident / tenant (if different from owner)">
           <input className="input" value={resident} onChange={(e) => setResident(e.target.value)} placeholder="Leave empty if owner lives here" />
         </Field>
-        <Field label="WhatsApp phone (admins only)">
+        <Field label="Owner's WhatsApp number (admins only)">
           <input className="input" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98xxxxxxxx" />
+        </Field>
+        <Field label="Tenant / resident's WhatsApp number (admins only)">
+          <input className="input" type="tel" inputMode="tel" value={residentPhone} onChange={(e) => setResidentPhone(e.target.value)} placeholder="Leave empty if owner lives here" />
         </Field>
         <Field label="Notes (admins only)">
           <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -67,7 +72,7 @@ function FlatSheet({ flat, onClose }: { flat: Flat; onClose: () => void }) {
         className="btn btn-primary mt-4 w-full"
         disabled={!owner.trim()}
         onClick={async () => {
-          if (await run({ type: "flat.update", flatId: flat.id, owner, resident, phone, notes }, `Flat ${flat.id} saved`)) onClose();
+          if (await run({ type: "flat.update", flatId: flat.id, owner, resident, phone, residentPhone, notes }, `Flat ${flat.id} saved`)) onClose();
         }}
       >
         Save
@@ -189,7 +194,7 @@ export function SettingsPanel({ db, month }: { db: DB; month: MonthKey }) {
           <h2 className="text-lg font-bold text-crit-ink">Sample data is loaded</h2>
           <p className="mt-1 text-sm text-crit-ink">
             The app is showing September 2026 from the book for a trial run. When you are ready, remove it to start fresh from{" "}
-            <strong>this month with ₹0</strong>. Flat owner names are kept; payments, expenses, works and sample rules are removed.
+            <strong>this month with ₹0</strong>. Flat owner names and phone numbers are kept; payments, expenses, works, rules and notices are removed.
           </p>
           <button
             className="btn btn-danger mt-3"

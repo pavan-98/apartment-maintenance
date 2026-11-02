@@ -19,9 +19,10 @@ import {
 } from "@/components/dashboard";
 import { HistoryTab } from "@/components/HistoryTab";
 import { RulesTab, isRecent } from "@/components/RulesTab";
+import { NoticePopup, NoticesTab, useUnseenNotices } from "@/components/Notices";
 
-type Tab = "month" | "history" | "rules";
-const TABS: Tab[] = ["month", "history", "rules"];
+type Tab = "month" | "notices" | "history" | "rules";
+const TABS: Tab[] = ["month", "notices", "history", "rules"];
 
 export default function Home() {
   const { db, loading, error, offline, reload, t, lang } = useApp();
@@ -51,6 +52,8 @@ export default function Home() {
   const current = month && months.includes(month) ? month : db ? defaultMonth(db) : null;
   const s = summaries.find((x) => x.month === current);
   const newRules = db?.rules.filter((r) => isRecent(r)).length ?? 0;
+  const unseenNotices = useUnseenNotices(db).length;
+  const badge = (k: Tab) => (k === "rules" ? newRules : k === "notices" ? unseenNotices : 0);
 
   return (
     <>
@@ -80,7 +83,7 @@ export default function Home() {
 
             <nav className="hidden gap-1 rounded-xl bg-surface-2 p-1 sm:flex no-print" aria-label="Sections">
               {TABS.map((k) => (
-                <TabButton key={k} active={tab === k} onClick={() => go(k)} badge={k === "rules" ? newRules : 0}>
+                <TabButton key={k} active={tab === k} onClick={() => go(k)} badge={badge(k)}>
                   {t(k === "month" ? "thisMonth" : k)}
                 </TabButton>
               ))}
@@ -113,6 +116,7 @@ export default function Home() {
                 }}
               />
             )}
+            {tab === "notices" && <NoticesTab db={db} />}
             {tab === "rules" && <RulesTab rules={db.rules} />}
           </div>
         )}
@@ -123,7 +127,7 @@ export default function Home() {
           className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden no-print"
           aria-label="Sections"
         >
-          <div className="grid grid-cols-3">
+          <div className="grid grid-cols-4">
             {TABS.map((k) => (
               <button
                 key={k}
@@ -133,9 +137,9 @@ export default function Home() {
               >
                 <TabIcon tab={k} />
                 {t(k === "month" ? "thisMonth" : k)}
-                {k === "rules" && newRules > 0 && (
+                {badge(k) > 0 && (
                   <span className="absolute right-[calc(50%-22px)] top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-crit px-1 text-[10px] text-white">
-                    {newRules}
+                    {badge(k)}
                   </span>
                 )}
               </button>
@@ -144,6 +148,7 @@ export default function Home() {
         </nav>
       )}
       {flat && db && <FlatSheet db={db} flat={flat} onClose={() => setFlat(null)} />}
+      {db && <NoticePopup db={db} />}
     </>
   );
 }
@@ -168,6 +173,12 @@ function TabIcon({ tab }: { tab: Tab }) {
       <svg {...p}>
         <rect x="3" y="4" width="18" height="17" rx="2" />
         <path d="M3 9h18M8 2v4M16 2v4" />
+      </svg>
+    );
+  if (tab === "notices")
+    return (
+      <svg {...p}>
+        <path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1ZM15 9a3 3 0 0 1 0 6M18 6a7 7 0 0 1 0 12" />
       </svg>
     );
   if (tab === "history")

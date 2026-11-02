@@ -40,7 +40,7 @@ describe("September 2026 sample (from the book)", () => {
 
   it("hides phone numbers from residents", () => {
     const withPhone = applyAction(db, { type: "flat.update", flatId: "101", owner: "N. Raju", phone: "9876543210" }, "T", NOW);
-    expect(withPhone.flats[0].phone).toBe("9876543210");
+    expect(withPhone.flats[0].phone).toBe("+919876543210");
     expect(publicView(withPhone).flats[0].phone).toBeUndefined();
     expect(publicView(withPhone).audit).toEqual([]);
   });
