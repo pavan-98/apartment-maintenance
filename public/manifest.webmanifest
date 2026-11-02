@@ -1,0 +1,15 @@
+{
+  "name": "Srinivasa Sai Vigneswara Puppala Towers",
+  "short_name": "Puppala Towers",
+  "description": "Monthly maintenance, expenses and apartment rules",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f3ef",
+  "theme_color": "#0e6f66",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
