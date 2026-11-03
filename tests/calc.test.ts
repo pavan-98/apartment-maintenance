@@ -47,7 +47,7 @@ describe("Sample data: October 2026 from the book, November with only 501 paid",
   });
 
   it("hides phone numbers from residents", () => {
-    const withPhone = applyAction(db, { type: "flat.update", flatId: "101", owner: "N. Raju", phone: "9876543210" }, "T", NOW);
+    const withPhone = applyAction(db, { type: "flat.update", flatId: "101", owner: "K. Suresh", phone: "9876543210" }, "T", NOW);
     expect(withPhone.flats[0].phone).toBe("+919876543210");
     expect(publicView(withPhone).flats[0].phone).toBeUndefined();
     expect(publicView(withPhone).audit).toEqual([]);
@@ -56,15 +56,15 @@ describe("Sample data: October 2026 from the book, November with only 501 paid",
 
 describe("fresh start", () => {
   it("removing sample data keeps owners, clears money, starts this month at ₹0", () => {
-    const db = applyAction(demoDB(NOW), { type: "data.clearDemo" }, "Pavan", NOW);
+    const db = applyAction(demoDB(NOW), { type: "data.clearDemo" }, "Admin", NOW);
     expect(db.settings.isDemo).toBe(false);
     expect(db.settings.startMonth).toBe("2026-11");
     expect(db.settings.openingBalance).toBe(0);
     expect(db.payments).toEqual([]);
     expect(db.expenses).toEqual([]);
     expect(db.collections).toEqual([]);
-    expect(db.flats.find((f) => f.id === "203")?.owner).toBe("Manjula");
-    expect(db.audit[0].by).toBe("Pavan");
+    expect(db.flats.find((f) => f.id === "203")?.owner).toBe("Lakshmi Devi");
+    expect(db.audit[0].by).toBe("Admin");
   });
 
   it("does not raise a red alert before the due day, only after", () => {

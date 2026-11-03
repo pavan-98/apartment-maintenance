@@ -4,34 +4,29 @@ Time needed: about 15 minutes. Cost: ₹0. Vercel's free "Hobby" plan and Upstas
 
 You need:
 - Your Vercel account (log in with GitHub at https://vercel.com).
-- Access to the GitHub repository `pavan-98/apartment-maintenance`.
+- Your own copy of this repository on GitHub: open https://github.com/pavan-98/apartment-maintenance and click **Fork**.
 
 ---
 
-## Step 1 — Put the code on the `main` branch
+## Step 1 — Get the code
 
-Vercel publishes the live site from your repository's main branch. The app was built on the branch `ccr-c7c85cf3-rdsyaw`, so merge it first:
-
-1. Open https://github.com/pavan-98/apartment-maintenance
-2. GitHub shows a yellow bar: **"ccr-c7c85cf3-rdsyaw had recent pushes" → Compare & pull request**. Click it. If there's no bar: **Pull requests → New pull request**, base `main`, compare `ccr-c7c85cf3-rdsyaw`.
-3. Click **Create pull request**, then **Merge pull request → Confirm merge**.
-
-> Alternative: skip the merge and, after Step 2, set Vercel → Project → **Settings → Git → Production Branch** to `ccr-c7c85cf3-rdsyaw`.
+Fork the repository (see above) so you have your own copy, e.g. `your-name/apartment-maintenance`. Vercel will publish the `main` branch of your fork and redeploy automatically whenever it changes.
 
 ## Step 2 — Create the Vercel project
 
 1. Go to https://vercel.com/new
 2. Under **Import Git Repository**, find `apartment-maintenance` and click **Import**.
-   - Not in the list? Click **Adjust GitHub App Permissions** (or "Configure GitHub App"), allow access to `apartment-maintenance`, and come back.
+   - Not in the list? Click **Adjust GitHub App Permissions** (or "Configure GitHub App"), allow access to your fork, and come back.
 3. On the **Configure Project** screen:
-   - **Project Name**: this becomes your web address. For example, `puppala-towers` gives `https://puppala-towers.vercel.app`.
+   - **Project Name**: this becomes your web address. For example, `sunrise-residency` gives `https://sunrise-residency.vercel.app`.
    - **Framework Preset**: Next.js (detected automatically). Leave **Build and Output Settings** as they are.
    - Open **Environment Variables** and add:
 
      | Key | Value |
      |---|---|
-     | `ADMIN_PASSWORD` | A password only admins will know, e.g. `Puppala@2026!` (make up your own) |
+     | `ADMIN_PASSWORD` | A password only admins will know, e.g. `Sunrise@2026!` (make up your own) |
      | `AUTH_SECRET` | Any long random text, e.g. 30+ random letters and numbers |
+     | `NEXT_PUBLIC_APARTMENT_NAME` | Your apartment's name, e.g. `Sunrise Residency` |
 
 4. Click **Deploy** and wait 1–2 minutes.
 
@@ -44,7 +39,7 @@ The site opens, but shows **"Database is not connected"**. That's expected; Step
 3. Choose:
    - **Primary region**: **Mumbai (ap-south-1)** if it's offered (closest to Visakhapatnam), otherwise the nearest option.
    - **Plan**: **Free**.
-   - **Name**: e.g. `puppala-db`.
+   - **Name**: e.g. `apartment-db`.
 4. Click **Create**.
 5. On the **Connect Project** screen, choose your project and keep all environments ticked (Development, Preview, Production). Leave **Custom Prefix** empty. Click **Connect**.
 
@@ -69,11 +64,11 @@ Open `https://<your-project>.vercel.app/api/health`. You should see:
 |---|---|
 | `"storage":"NOT CONNECTED"` | Step 3 wasn't connected to this project, or you skipped the redeploy in Step 4 |
 | `"adminPassword":"MISSING"` | Add `ADMIN_PASSWORD` under **Settings → Environment Variables**, then redeploy |
-| A 404 page | The project deployed a branch without the app. Do Step 1, then redeploy |
+| A 404 page | The project deployed a branch without the app. Check **Settings → Git → Production Branch** is `main`, then redeploy |
 
 ## Step 6 — Trial run, then start fresh
 
-1. Open `https://<your-project>.vercel.app`. You'll see September 2026 from the book as sample data, plus a sample notice pop-up.
+1. Open `https://<your-project>.vercel.app`. You'll see sample data (made-up names) and a few sample notices and rules.
 2. Tap the **🔒** button (top right) → enter your name and the `ADMIN_PASSWORD`.
 3. Try things out: mark payments, add expenses, post a notice, and print a notice.
 4. When you're happy, go to **Admin → Settings → Remove sample data & start fresh**. Books start this month at ₹0. Flat owners and phone numbers are kept.

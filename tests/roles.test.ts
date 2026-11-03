@@ -100,7 +100,7 @@ describe("manager permissions", () => {
     expect(can({ type: "data.clearDemo" })).toMatch(/main admin/);
     expect(can({ type: "template.save", templates: [] })).toMatch(/main admin/);
     expect(can({ type: "flat.update", flatId: "101", owner: "Someone else" })).toMatch(/owner names/);
-    expect(can({ type: "flat.update", flatId: "101", owner: "N. Raju", resident: "New tenant" })).toBeNull();
+    expect(can({ type: "flat.update", flatId: "101", owner: "K. Suresh", resident: "New tenant" })).toBeNull();
   });
 
   it("lets the main admin do anything", () => {

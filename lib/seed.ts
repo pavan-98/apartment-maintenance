@@ -1,27 +1,33 @@
 import type { DB, ExpenseTemplate, Flat, Settings } from "./types";
 import { currentMonth, formatDate, todayISO } from "./dates";
 
-export const APARTMENT_NAME = "Srinivasa Sai Vigneswara Puppala Towers";
+import { APARTMENT_NAME } from "./config";
+
+export { APARTMENT_NAME };
 
 const FLAT_IDS = ["101", "102", "103", "201", "202", "203", "301", "302", "303", "401", "402", "403", "501", "502", "503"];
 
-/** Owners as written in the maintenance book (September and October 2026 pages). */
+/**
+ * Sample flats for a 5-floor, 15-flat building. Names are made up; replace
+ * them in Admin → Flats. One owner ("Lakshmi Devi") owns several flats, to
+ * show how reminders are grouped per person.
+ */
 export const BOOK_FLATS: Flat[] = [
-  { id: "101", floor: 1, owner: "N. Raju" },
-  { id: "102", floor: 1, owner: "Ramabai" },
-  { id: "103", floor: 1, owner: "Udaya Shree" },
-  { id: "201", floor: 2, owner: "M.S. Naidu", resident: "Rambabu" },
-  { id: "202", floor: 2, owner: "Bhanu Reddy" },
-  { id: "203", floor: 2, owner: "Manjula" },
-  { id: "301", floor: 3, owner: "Manjula", resident: "Ch. Ravi" },
-  { id: "302", floor: 3, owner: "Manjula" },
-  { id: "303", floor: 3, owner: "Manjula" },
-  { id: "401", floor: 4, owner: "Manjula", resident: "P. Sri Lakshmi" },
-  { id: "402", floor: 4, owner: "Manjula", resident: "Santosh" },
-  { id: "403", floor: 4, owner: "Manjula", resident: "K. Jagadeswara Rao" },
-  { id: "501", floor: 5, owner: "Pavan Kalyan" },
-  { id: "502", floor: 5, owner: "Manjula", resident: "P. Mani" },
-  { id: "503", floor: 5, owner: "Manjula", resident: "G. Babu Rao" },
+  { id: "101", floor: 1, owner: "K. Suresh" },
+  { id: "102", floor: 1, owner: "Padma" },
+  { id: "103", floor: 1, owner: "R. Anitha" },
+  { id: "201", floor: 2, owner: "V. Prasad", resident: "Kiran" },
+  { id: "202", floor: 2, owner: "S. Mohan" },
+  { id: "203", floor: 2, owner: "Lakshmi Devi" },
+  { id: "301", floor: 3, owner: "Lakshmi Devi", resident: "B. Naveen" },
+  { id: "302", floor: 3, owner: "Lakshmi Devi" },
+  { id: "303", floor: 3, owner: "Lakshmi Devi" },
+  { id: "401", floor: 4, owner: "Lakshmi Devi", resident: "T. Swathi" },
+  { id: "402", floor: 4, owner: "Lakshmi Devi", resident: "Arjun" },
+  { id: "403", floor: 4, owner: "Lakshmi Devi", resident: "M. Srinivas" },
+  { id: "501", floor: 5, owner: "Ravi Teja" },
+  { id: "502", floor: 5, owner: "Lakshmi Devi", resident: "G. Hari" },
+  { id: "503", floor: 5, owner: "Lakshmi Devi", resident: "D. Kumar" },
 ];
 
 export const DEFAULT_TEMPLATES: ExpenseTemplate[] = [
@@ -95,9 +101,9 @@ const T = "2026-10-01T09:00:00.000Z";
 const day = (m: string, d: number) => `${m}-${String(d).padStart(2, "0")}`;
 
 /**
- * October 2026 from the maintenance book (page 58):
- * 102 and 202 did not pay; expenses ₹20,100 including ₹2,000 given to
- * Joga Rao for Dussehra (marked "please check with Joga Rao").
+ * Sample October 2026, based on a real maintenance-book page:
+ * 102 and 202 did not pay; expenses ₹20,100 including a ₹2,000
+ * festival contribution that still needs to be confirmed.
  */
 function addOctoberFromBook(db: DB) {
   const oct = "2026-10";
@@ -121,7 +127,7 @@ function addOctoberFromBook(db: DB) {
   e("lift", "Lift maintenance", "Lift maintenance", 1500, 15);
   e("liftacc", "Lift maintenance", "Lift accessories", 3000, 15);
   e("clean", "Cleaning material", "Liquid, bleaching powder etc.", 500, 22);
-  e("dussehra", "Festival", "Dussehra – given to Joga Rao", 2000, 1, "Please check with Joga Rao");
+  e("dussehra", "Festival", "Dussehra celebrations", 2000, 1, "Advance given to the festival committee – to be confirmed");
 }
 
 /** Made-up November 2026, just started: only flat 501 has paid, no expenses yet. */

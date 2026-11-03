@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useApp } from "./AppProvider";
 import { InstallButton } from "./InstallButton";
-import { APARTMENT_NAME } from "@/lib/seed";
+import { APARTMENT_NAME } from "@/lib/config";
 
 export function Header({ adminArea = false }: { adminArea?: boolean }) {
   const { db, lang, setLang, t, admin } = useApp();
   const name = db?.settings.apartmentName ?? APARTMENT_NAME;
-  // Split "… Puppala Towers" so the short name stands out on small screens.
+  // Show the last two words large (e.g. "Sunrise Residency") so the name fits on small screens.
   const words = name.split(" ");
   const short = words.slice(-2).join(" ");
   const lead = words.slice(0, -2).join(" ");

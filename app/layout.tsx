@@ -2,13 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppProvider } from "@/components/AppProvider";
 import { ServiceWorker } from "@/components/ServiceWorker";
-import { APARTMENT_NAME } from "@/lib/seed";
+import { APARTMENT_NAME, APARTMENT_SHORT_NAME } from "@/lib/config";
 
 export const metadata: Metadata = {
-  title: "Puppala Towers Maintenance",
+  title: `${APARTMENT_SHORT_NAME} Maintenance`,
   description: `Monthly maintenance, expenses and rules for ${APARTMENT_NAME}`,
-  manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Puppala Towers", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: APARTMENT_SHORT_NAME, statusBarStyle: "default" },
   icons: {
     icon: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],

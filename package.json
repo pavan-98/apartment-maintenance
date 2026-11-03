@@ -1,6 +1,13 @@
 {
   "name": "apartment-maintenance",
   "version": "1.0.0",
+  "description": "Mobile-first maintenance app for apartment associations: payments, expenses, notices and rules in English and Telugu",
+  "license": "MIT",
+  "author": "Pavan Kalyan Neerukonda",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pavan-98/apartment-maintenance.git"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev",

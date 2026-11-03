@@ -39,11 +39,11 @@ describe("phone numbers", () => {
   });
 });
 
-function withManjulaPhones(db: DB): DB {
-  const manjula = db.flats.filter((f) => f.owner === "Manjula").map((f) => ({ flatId: f.id, phone: "9000000001" }));
+function withOwnerPhones(db: DB): DB {
+  const owned = db.flats.filter((f) => f.owner === "Lakshmi Devi").map((f) => ({ flatId: f.id, phone: "9000000001" }));
   return applyAction(
     db,
-    { type: "contacts.save", contacts: [...manjula, { flatId: "102", phone: "9000000102" }, { flatId: "202", phone: "9000000202" }, { flatId: "301", phone: "9000000001", residentPhone: "9000000301" }] },
+    { type: "contacts.save", contacts: [...owned, { flatId: "102", phone: "9000000102" }, { flatId: "202", phone: "9000000202" }, { flatId: "301", phone: "9000000001", residentPhone: "9000000301" }] },
     "A",
     NOW,
   );
@@ -51,34 +51,34 @@ function withManjulaPhones(db: DB): DB {
 
 describe("WhatsApp sending", () => {
   it("gives one message per person, even if they own several flats", () => {
-    const db = withManjulaPhones(demoDB(NOW));
+    const db = withOwnerPhones(demoDB(NOW));
     const rs = recipients(db, "owners");
-    const manjula = rs.find((r) => r.name === "Manjula")!;
-    expect(manjula.flats).toEqual(["203", "301", "302", "303", "401", "402", "403", "502", "503"]);
+    const lakshmi = rs.find((r) => r.name === "Lakshmi Devi")!;
+    expect(lakshmi.flats).toEqual(["203", "301", "302", "303", "401", "402", "403", "502", "503"]);
     expect(rs).toHaveLength(3);
-    expect(recipients(db, "residents").some((r) => r.name === "Ch. Ravi")).toBe(true);
+    expect(recipients(db, "residents").some((r) => r.name === "B. Naveen")).toBe(true);
     expect(flatsMissingPhone(db, "owners").map((f) => f.id)).toContain("101");
   });
 
   it("reminds only flats with dues, with their amounts", () => {
-    const db = withManjulaPhones(demoDB(NOW));
+    const db = withOwnerPhones(demoDB(NOW));
     const msgs = reminderMessages(db, duesReport(db, NOW), { includeUpcoming: false, audience: "owners", lang: "both", url: "https://x" });
     expect(msgs.map((m) => m.recipient.flats[0])).toEqual(["102", "202"]);
-    expect(msgs.find((m) => m.recipient.flats[0] === "202")?.text).toContain("Bhanu Reddy");
-    expect(msgs[0].text).toContain("Ramabai");
+    expect(msgs.find((m) => m.recipient.flats[0] === "202")?.text).toContain("S. Mohan");
+    expect(msgs[0].text).toContain("Padma");
     expect(msgs[0].text).toContain("₹1,500 (October 2026)");
     expect(msgs[0].text).toContain("నమస్తే");
   });
 
   it("sends notices and custom messages to everyone with a number", () => {
-    const db = withManjulaPhones(demoDB(NOW));
+    const db = withOwnerPhones(demoDB(NOW));
     const n = db.notices[0];
     const msgs = noticeMessages(db, n, { audience: "both", lang: "both", url: "https://x/notice" });
     expect(msgs.length).toBe(4);
     expect(msgs[0].text).toContain(n.titleEn);
     expect(msgs[0].text).toContain(n.titleTe);
     const custom = customMessages(db, "Hi {name}, flat {flat}", "owners");
-    expect(custom.find((m) => m.recipient.name === "Manjula")?.text).toBe("Hi Manjula, flat 203, 301, 302, 303, 401, 402, 403, 502, 503");
+    expect(custom.find((m) => m.recipient.name === "Lakshmi Devi")?.text).toBe("Hi Lakshmi Devi, flat 203, 301, 302, 303, 401, 402, 403, 502, 503");
   });
 });
 
