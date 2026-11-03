@@ -1,0 +1,245 @@
+import type { DB, ExpenseTemplate, Flat, Settings } from "./types";
+import { currentMonth, formatDate, todayISO } from "./dates";
+
+import { APARTMENT_NAME } from "./config";
+
+export { APARTMENT_NAME };
+
+const FLAT_IDS = ["101", "102", "103", "201", "202", "203", "301", "302", "303", "401", "402", "403", "501", "502", "503"];
+
+/**
+ * Sample flats for a 5-floor, 15-flat building. Names are made up; replace
+ * them in Admin → Flats. One owner ("Lakshmi Devi") owns several flats, to
+ * show how reminders are grouped per person.
+ */
+export const BOOK_FLATS: Flat[] = [
+  { id: "101", floor: 1, owner: "K. Suresh" },
+  { id: "102", floor: 1, owner: "Padma" },
+  { id: "103", floor: 1, owner: "R. Anitha" },
+  { id: "201", floor: 2, owner: "V. Prasad", resident: "Kiran" },
+  { id: "202", floor: 2, owner: "S. Mohan" },
+  { id: "203", floor: 2, owner: "Lakshmi Devi" },
+  { id: "301", floor: 3, owner: "Lakshmi Devi", resident: "B. Naveen" },
+  { id: "302", floor: 3, owner: "Lakshmi Devi" },
+  { id: "303", floor: 3, owner: "Lakshmi Devi" },
+  { id: "401", floor: 4, owner: "Lakshmi Devi", resident: "T. Swathi" },
+  { id: "402", floor: 4, owner: "Lakshmi Devi", resident: "Arjun" },
+  { id: "403", floor: 4, owner: "Lakshmi Devi", resident: "M. Srinivas" },
+  { id: "501", floor: 5, owner: "Ravi Teja" },
+  { id: "502", floor: 5, owner: "Lakshmi Devi", resident: "G. Hari" },
+  { id: "503", floor: 5, owner: "Lakshmi Devi", resident: "D. Kumar" },
+];
+
+export const DEFAULT_TEMPLATES: ExpenseTemplate[] = [
+  { id: "t-salary", category: "Salary", label: "Watchman / cleaner salary", amount: 7000 },
+  { id: "t-power", category: "Electricity", label: "Common area electricity bill", amount: 6565 },
+  { id: "t-gvmc", category: "GVMC & water tank", label: "GVMC + tank cleaning", amount: 600 },
+  { id: "t-lift", category: "Lift maintenance", label: "Lift maintenance", amount: 1500 },
+  { id: "t-clean", category: "Cleaning material", label: "Material for cleaning", amount: 500 },
+];
+
+export function baseSettings(now: Date = new Date()): Settings {
+  return {
+    apartmentName: APARTMENT_NAME,
+    maintenanceAmount: 1500,
+    maintenanceOverrides: {},
+    startMonth: currentMonth(now),
+    openingBalance: 0,
+    carryForward: true,
+    dueDay: 10,
+    expenseTemplates: DEFAULT_TEMPLATES.map((t) => ({ ...t })),
+    isDemo: false,
+  };
+}
+
+/** Empty books (flat owners kept) starting from the current month. */
+export function freshDB(flats: Flat[] = BOOK_FLATS, now: Date = new Date()): DB {
+  return {
+    version: 1,
+    settings: baseSettings(now),
+    flats: flats.map((f) => ({ ...f })),
+    payments: [],
+    expenses: [],
+    collections: [],
+    rules: [],
+    notices: [],
+    users: [],
+    audit: [],
+  };
+}
+
+/** Fill in fields added in later versions so older saved data keeps working. */
+export function normalizeDB(db: DB): DB {
+  return {
+    ...db,
+    notices: (db.notices ?? []).map((n) => ({
+      ...n,
+      popupMode: n.popupMode ?? (n.popup ? "once" : "none"),
+    })),
+    rules: (db.rules ?? []).map((r) => ({
+      ...r,
+      titleEn: r.titleEn ?? r.title ?? "",
+      titleTe: r.titleTe ?? "",
+      bodyEn: r.bodyEn ?? r.body ?? "",
+      bodyTe: r.bodyTe ?? "",
+      category: r.category ?? "general",
+    })),
+    users: db.users ?? [],
+    collections: db.collections ?? [],
+    audit: db.audit ?? [],
+  };
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+const T = "2026-10-01T09:00:00.000Z";
+
+const day = (m: string, d: number) => `${m}-${String(d).padStart(2, "0")}`;
+
+/**
+ * Sample October 2026, based on a real maintenance-book page:
+ * 102 and 202 did not pay; expenses ₹20,100 including a ₹2,000
+ * festival contribution that still needs to be confirmed.
+ */
+function addOctoberFromBook(db: DB) {
+  const oct = "2026-10";
+  const unpaid = new Set(["102", "202"]);
+  for (const [i, flatId] of FLAT_IDS.filter((id) => !unpaid.has(id)).entries()) {
+    db.payments.push({
+      id: `demo-p-oct-${flatId}`,
+      flatId,
+      month: oct,
+      amount: 1500,
+      date: day(oct, Math.min(28, 3 + i)),
+      mode: i % 2 === 0 ? "upi" : "cash",
+      createdAt: T,
+    });
+  }
+  const e = (id: string, category: string, label: string, amount: number, d: number, note?: string) =>
+    db.expenses.push({ id: `demo-e-oct-${id}`, month: oct, category, label, amount, date: day(oct, d), note, createdAt: T });
+  e("salary", "Salary", "Watchman / cleaner salary", 7000, 30);
+  e("power", "Electricity", "Common area electricity bill", 5500, 20, "Bill ₹5,492, rounded to ₹5,500 in the book");
+  e("gvmc", "GVMC & water tank", "GVMC (₹300) + tank cleaning (₹300)", 600, 18);
+  e("lift", "Lift maintenance", "Lift maintenance", 1500, 15);
+  e("liftacc", "Lift maintenance", "Lift accessories", 3000, 15);
+  e("clean", "Cleaning material", "Liquid, bleaching powder etc.", 500, 22);
+  e("dussehra", "Festival", "Dussehra celebrations", 2000, 1, "Advance given to the festival committee – to be confirmed");
+}
+
+/** Made-up November 2026, just started: only flat 501 has paid, no expenses yet. */
+function addSampleNovember(db: DB) {
+  const nov = "2026-11";
+  db.payments.push({ id: "demo-p-nov-501", flatId: "501", month: nov, amount: 1500, date: day(nov, 1), mode: "upi", createdAt: T });
+}
+
+/** October 2026 from the maintenance book, plus a made-up November where only 501 has paid, as sample data. */
+export function demoDB(now: Date = new Date()): DB {
+  const db = freshDB(BOOK_FLATS, now);
+  // Sample starts at October 2026 with ₹0 in hand (no carry-over from earlier pages).
+  db.settings = { ...db.settings, isDemo: true, startMonth: "2026-10" };
+
+  addOctoberFromBook(db);
+  addSampleNovember(db);
+
+  db.rules = [
+    {
+      id: "demo-r-1",
+      category: "payments",
+      titleEn: "Maintenance due by the 10th",
+      titleTe: "ప్రతి నెల 10వ తేదీలోపు మెయింటెనెన్స్",
+      bodyEn: "Monthly maintenance of ₹1,500 should be paid by the 10th of every month.",
+      bodyTe: "నెలవారీ మెయింటెనెన్స్ ₹1,500 ప్రతి నెల 10వ తేదీలోపు చెల్లించాలి.",
+      important: true,
+      createdAt: T,
+      updatedAt: T,
+    },
+    {
+      id: "demo-r-2",
+      category: "cleanliness",
+      titleEn: "Keep common areas clear",
+      titleTe: "కామన్ ఏరియాలను ఖాళీగా ఉంచండి",
+      bodyEn: "Do not leave shoes, bicycles or garbage bags in corridors and staircases.",
+      bodyTe: "కారిడార్లు, మెట్లపై చెప్పులు, సైకిళ్ళు లేదా చెత్త సంచులు ఉంచకూడదు.",
+      createdAt: T,
+      updatedAt: T,
+    },
+    {
+      id: "demo-r-3",
+      category: "lift",
+      titleEn: "Lift usage",
+      titleTe: "లిఫ్ట్ వాడకం",
+      bodyEn: "Children below 10 should use the lift only with an adult. Do not use the lift for heavy construction material.",
+      bodyTe: "10 ఏళ్ల లోపు పిల్లలు పెద్దవారితో మాత్రమే లిఫ్ట్ వాడాలి. నిర్మాణ సామగ్రి వంటి బరువైన వస్తువులకు లిఫ్ట్ వాడకూడదు.",
+      createdAt: T,
+      updatedAt: T,
+    },
+    {
+      id: "demo-r-4",
+      category: "parking",
+      titleEn: "Parking",
+      titleTe: "పార్కింగ్",
+      bodyEn: "Park only in your allotted slot. Visitors' vehicles must not block the gate.",
+      bodyTe: "మీకు కేటాయించిన స్థలంలో మాత్రమే వాహనం పార్క్ చేయండి. సందర్శకుల వాహనాలు గేటుకు అడ్డుగా ఉంచకూడదు.",
+      announce: true,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    },
+    {
+      id: "demo-r-5",
+      category: "water",
+      titleEn: "Report water leaks",
+      titleTe: "నీటి లీకేజీలు తెలియజేయండి",
+      bodyEn: "Report leaking taps or an overflowing tank to the watchman immediately.",
+      bodyTe: "కారుతున్న కుళాయిలు లేదా ట్యాంక్ పొంగిపొర్లడం గమనిస్తే వెంటనే వాచ్‌మన్‌కు తెలియజేయండి.",
+      createdAt: T,
+      updatedAt: T,
+    },
+  ];
+
+  const today = todayISO(now);
+  const nowIso = now.toISOString();
+  db.notices = [
+    {
+      id: "demo-n-lift",
+      titleEn: "Lift servicing — lift will be off",
+      titleTe: "లిఫ్ట్ సర్వీసింగ్ — లిఫ్ట్ పనిచేయదు",
+      bodyEn: `The lift will be switched off for servicing on ${formatDate(addDaysISO(today, 5))} from 10 AM to 2 PM. Please use the stairs during this time.`,
+      bodyTe: `${formatDate(addDaysISO(today, 5), "te")} న ఉదయం 10 నుండి మధ్యాహ్నం 2 వరకు సర్వీసింగ్ కోసం లిఫ్ట్ ఆపివేయబడుతుంది. దయచేసి ఆ సమయంలో మెట్లు వాడండి.`,
+      important: true,
+      popupMode: "every",
+      expiresOn: addDaysISO(today, 5),
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: "demo-n-1",
+      titleEn: "Water tank cleaning on Sunday",
+      titleTe: "ఆదివారం వాటర్ ట్యాంక్ శుభ్రత",
+      bodyEn: "The overhead water tank will be cleaned this Sunday from 9 AM to 1 PM. There will be no water supply during this time. Please store water in advance.",
+      bodyTe: "ఈ ఆదివారం ఉదయం 9 నుండి మధ్యాహ్నం 1 గంట వరకు పైన ఉన్న వాటర్ ట్యాంక్ శుభ్రం చేయబడుతుంది. ఈ సమయంలో నీటి సరఫరా ఉండదు. దయచేసి ముందుగానే నీరు నిల్వ చేసుకోండి.",
+      popupMode: "once",
+      expiresOn: addDaysISO(today, 10),
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: "demo-n-contacts",
+      titleEn: "Emergency help",
+      titleTe: "అత్యవసర సహాయం",
+      bodyEn: "Watchman is available at the gate 24×7.\nIf stuck in the lift, press the alarm button and stay calm.\nFor water or power problems, inform the watchman first.",
+      bodyTe: "వాచ్‌మన్ గేటు వద్ద 24 గంటలూ అందుబాటులో ఉంటారు.\nలిఫ్ట్‌లో ఇరుక్కుపోతే అలారం బటన్ నొక్కి ప్రశాంతంగా ఉండండి.\nనీరు లేదా కరెంటు సమస్యలకు ముందుగా వాచ్‌మన్‌కు తెలియజేయండి.",
+      popupMode: "none",
+      createdAt: T,
+      updatedAt: T,
+    },
+  ];
+
+  db.audit = [
+    { id: "demo-a-1", at: T, by: "System", action: "Sample data", detail: "Loaded October 2026 from the maintenance book, plus a sample November (only 501 paid)" },
+  ];
+  return db;
+}
