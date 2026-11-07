@@ -17,12 +17,17 @@ interface Backend {
   write<T extends Versioned>(doc: DocName, db: T, expected: number): Promise<boolean>;
   putReceipt(id: string, data: string): Promise<void>;
   getReceipt(id: string): Promise<string | null>;
+  /** Push subscriptions, keyed by a hash of their endpoint. */
+  pushSave(key: string, value: string): Promise<void>;
+  pushRemove(keys: string[]): Promise<void>;
+  pushAll(): Promise<string[]>;
 }
 
 type DocName = "db" | "book";
 type Versioned = { version: number };
 const docKey = (doc: DocName) => `apt:${doc}`;
 const verKey = (doc: DocName) => `apt:${doc}:version`;
+const PUSH_KEY = "apt:push";
 
 /**
  * Find the Upstash REST credentials. Vercel's Upstash integration adds
@@ -70,6 +75,16 @@ function redisBackend(): Backend | null {
     async getReceipt(id) {
       return (await redis.get<string>(`apt:receipt:${id}`)) ?? null;
     },
+    async pushSave(key, value) {
+      await redis.hset(PUSH_KEY, { [key]: value });
+    },
+    async pushRemove(keys) {
+      if (keys.length) await redis.hdel(PUSH_KEY, ...keys);
+    },
+    async pushAll() {
+      const all = (await redis.hgetall<Record<string, string>>(PUSH_KEY)) ?? {};
+      return Object.values(all).map((v) => (typeof v === "string" ? v : JSON.stringify(v)));
+    },
   };
 }
 
@@ -77,7 +92,25 @@ function fileBackend(): Backend {
   const dir = process.env.DATA_DIR || path.join(process.cwd(), "data");
   const fileOf = (doc: DocName) => path.join(dir, `${doc}.json`);
   const receipts = path.join(dir, "receipts");
+  const pushFile = path.join(dir, "push.json");
   let lock: Promise<unknown> = Promise.resolve();
+  const readPush = async (): Promise<Record<string, string>> => {
+    try {
+      return JSON.parse(await fs.readFile(pushFile, "utf8"));
+    } catch {
+      return {};
+    }
+  };
+  const editPush = (fn: (all: Record<string, string>) => void) => {
+    const run = lock.then(async () => {
+      const all = await readPush();
+      fn(all);
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(pushFile, JSON.stringify(all, null, 1));
+    });
+    lock = run.catch(() => undefined);
+    return run;
+  };
   return {
     name: "file",
     async read<T extends Versioned>(doc: DocName) {
@@ -112,6 +145,17 @@ function fileBackend(): Backend {
       } catch {
         return null;
       }
+    },
+    pushSave: (key, value) =>
+      editPush((all) => {
+        all[key] = value;
+      }),
+    pushRemove: (keys) =>
+      editPush((all) => {
+        for (const k of keys) delete all[k];
+      }),
+    async pushAll() {
+      return Object.values(await readPush());
     },
   };
 }
@@ -190,4 +234,18 @@ export async function saveReceipt(id: string, dataUrl: string) {
 
 export async function readReceipt(id: string) {
   return getBackend().getReceipt(id);
+}
+
+/* ---------- push notification subscriptions ---------- */
+
+export async function savePushSubscription(key: string, value: string) {
+  await getBackend().pushSave(key, value);
+}
+
+export async function removePushSubscriptions(keys: string[]) {
+  await getBackend().pushRemove(keys);
+}
+
+export async function allPushSubscriptions(): Promise<string[]> {
+  return getBackend().pushAll();
 }

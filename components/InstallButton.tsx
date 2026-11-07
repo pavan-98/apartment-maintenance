@@ -1,13 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useApp } from "./AppProvider";
 import { Sheet } from "./Sheet";
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
+import { useInstall } from "./install";
 
 /**
  * A quiet "Install app" button. The browser's automatic install banner is
@@ -15,42 +11,14 @@ interface BeforeInstallPromptEvent extends Event {
  */
 export function InstallButton() {
   const { t } = useApp();
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [standalone, setStandalone] = useState(false);
+  const install = useInstall();
   const [help, setHelp] = useState(false);
-  const [ios, setIos] = useState(false);
 
-  useEffect(() => {
-    const mq = window.matchMedia("(display-mode: standalone)");
-    const nav = navigator as Navigator & { standalone?: boolean };
-    setStandalone(mq.matches || nav.standalone === true);
-    setIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
-    const onPrompt = (e: Event) => {
-      e.preventDefault(); // no automatic prompt
-      setDeferred(e as BeforeInstallPromptEvent);
-    };
-    const onInstalled = () => {
-      setDeferred(null);
-      setStandalone(true);
-    };
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
-
-  if (standalone) return null;
+  if (!install.ready || install.standalone) return null;
 
   const onClick = async () => {
-    if (deferred) {
-      await deferred.prompt();
-      await deferred.userChoice.catch(() => undefined);
-      setDeferred(null);
-    } else {
-      setHelp(true);
-    }
+    if (install.canPrompt) await install.prompt();
+    else setHelp(true);
   };
 
   return (
@@ -62,7 +30,7 @@ export function InstallButton() {
         <span className="hidden sm:inline">{t("install")}</span>
       </button>
       <Sheet open={help} onClose={() => setHelp(false)} title={t("installTitle")} closeLabel={t("close")}>
-        <p className="text-base leading-relaxed">{ios ? t("installIos") : t("installOther")}</p>
+        <p className="text-base leading-relaxed">{install.ios ? t("installIos") : t("installOther")}</p>
       </Sheet>
     </>
   );

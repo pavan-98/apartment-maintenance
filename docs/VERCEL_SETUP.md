@@ -66,6 +66,28 @@ Open `https://<your-project>.vercel.app/api/health`. You should see:
 | `"adminPassword":"MISSING"` | Add `ADMIN_PASSWORD` under **Settings → Environment Variables**, then redeploy |
 | A 404 page | The project deployed a branch without the app. Check **Settings → Git → Production Branch** is `main`, then redeploy |
 
+## Step 5b — Phone notifications (optional, free)
+
+Residents can get a notification on their phone when a notice is posted. It uses the browsers' own free push service; you only need a pair of keys.
+
+1. On any computer with Node.js, run `npx web-push generate-vapid-keys`. It prints a **Public Key** and a **Private Key**.
+2. In Vercel, **Settings → Environment Variables**, add (all environments ticked):
+
+   | Key | Value |
+   |---|---|
+   | `VAPID_PUBLIC_KEY` | the Public Key |
+   | `VAPID_PRIVATE_KEY` | the Private Key (keep it secret) |
+
+3. Redeploy (Deployments → ⋯ → Redeploy).
+
+Generate the keys **once** and keep them. If they change, every phone has to turn notifications on again.
+
+What residents see: after the notice pop-ups, the app asks them to **turn on notifications** and **install the app**. "Not now" hides it for a week, and they can turn notifications on or off any time at the top of the **Notices** tab.
+- **Android and computers** (Chrome, Edge, Firefox, Samsung Internet): works straight from the browser; installing is optional.
+- **iPhone / iPad** (iOS 16.4 or later): only after **Share → Add to Home Screen** and opening the app from the Home Screen. The app shows these steps.
+
+When you post a notice, **Send a notification to N subscribed phones** is ticked. Any current notice also has a **🔔 Notify phones** button to send it again.
+
 ## Step 6 — Trial run, then start fresh
 
 1. Open `https://<your-project>.vercel.app`. You'll see sample data (made-up names) and a few sample notices and rules.
@@ -97,5 +119,7 @@ Open `https://<your-project>.vercel.app/api/health`. You should see:
 ## Troubleshooting
 - **"Please log in again"** while saving: your login expired (after 30 days) or the password was changed. Log in again.
 - **The app looks old after an update**: close the app or tab and open it again. The installed app refreshes itself on the next launch.
+- **Admin shows "Phone notifications are not set up"**: add `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (Step 5b) and redeploy.
+- **A resident doesn't get notifications**: on iPhone the app must be opened from the Home Screen; on Android check the phone's notification settings for the browser, and that notifications aren't blocked for the site (🔒 next to the address).
 - **WhatsApp opens but doesn't pick the person**: check the number in Admin → Phone numbers. A 10-digit Indian mobile number is enough.
 - **Build fails on Vercel**: open the failed deployment → **Build Logs**, and share the red error lines.

@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth";
 import { updateDB } from "@/lib/store";
 import { getSession, viewFor } from "@/lib/session";
 import { applyAction, ActionError, type Action } from "@/lib/actions";
 import { checkPermission } from "@/lib/permissions";
+import { sendNoticePush, vapidKeys } from "@/lib/pushSend";
 
 export async function POST(req: Request) {
   const { session } = await getSession();
@@ -30,6 +31,11 @@ export async function POST(req: Request) {
       if (denied) throw new ActionError(denied);
       return applyAction(cur, action, by);
     });
+    // "Send a notification to phones" ticked when posting or editing a notice.
+    if ((action.type === "notice.add" || action.type === "notice.update") && action.notify && vapidKeys()) {
+      const n = action.type === "notice.add" ? db.notices[0] : db.notices.find((x) => x.id === action.id);
+      if (n) after(() => sendNoticePush(n).then((r) => console.log("notice push", r)).catch((e) => console.error("notice push", e)));
+    }
     return NextResponse.json({ db: viewFor(db, session), admin: session.name, role: session.role });
   } catch (e) {
     if (e instanceof ActionError) return NextResponse.json({ error: e.message }, { status: 400 });

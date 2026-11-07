@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDB, storageName } from "@/lib/store";
 import { adminPassword } from "@/lib/auth";
+import { vapidKeys } from "@/lib/pushSend";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export async function GET() {
       storage: storage === "redis" ? "Upstash Redis (connected)" : storage === "file" ? "Local file (development only)" : "NOT CONNECTED",
       database,
       adminPassword: adminPasswordSet ? "set" : process.env.NODE_ENV === "production" ? "MISSING — add ADMIN_PASSWORD" : "not set (dev default: admin)",
+      notifications: vapidKeys() ? "set" : "off (optional: add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)",
     },
     { status: ok ? 200 : 500, headers: { "Cache-Control": "no-store" } },
   );

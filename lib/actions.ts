@@ -24,8 +24,8 @@ import { inr } from "./calc";
 export type Action =
   | { type: "flat.update"; flatId: string; owner: string; resident?: string; phone?: string; residentPhone?: string; notes?: string }
   | { type: "contacts.save"; contacts: { flatId: string; phone?: string; residentPhone?: string }[] }
-  | { type: "notice.add"; notice: NoticeInput }
-  | { type: "notice.update"; id: string; notice: NoticeInput }
+  | { type: "notice.add"; notice: NoticeInput; notify?: boolean }
+  | { type: "notice.update"; id: string; notice: NoticeInput; notify?: boolean }
   | { type: "notice.delete"; id: string }
   | { type: "payment.add"; flatId: string; month: string; amount: number; date: string; mode: PayMode; receivedBy?: string; note?: string }
   | { type: "payment.markAll"; flatIds: string[]; month: string; date: string; mode: PayMode }

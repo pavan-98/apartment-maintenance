@@ -27,6 +27,22 @@ function origin() {
 
 /* ===================== Notices ===================== */
 
+type PushInfo = { enabled: boolean; subscribers?: number };
+
+/** Whether push notifications are set up on the server, and how many phones are subscribed. */
+function usePushInfo() {
+  const [info, setInfo] = useState<PushInfo | null>(null);
+  const refresh = () =>
+    fetch("/api/push", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: PushInfo) => setInfo(j))
+      .catch(() => undefined);
+  useEffect(() => {
+    refresh();
+  }, []);
+  return { info, refresh };
+}
+
 const POPUP_LABEL: Record<PopupMode, string> = {
   every: "🔁 Pops up every time",
   once: "1️⃣ Pops up once",
@@ -36,7 +52,38 @@ const POPUP_LABEL: Record<PopupMode, string> = {
 export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (noticeId: string) => void }) {
   const [editing, setEditing] = useState<Notice | "new" | null>(null);
   const [showExpired, setShowExpired] = useState(false);
+  const [sending, setSending] = useState<string | null>(null);
+  const { toast } = useAdmin();
+  const push = usePushInfo();
+  const pushOn = !!push.info?.enabled;
+  const subs = push.info?.subscribers ?? 0;
   const today = todayISO();
+
+  const notifyPhones = async (n: Notice) => {
+    if (!confirm(`Send a notification about “${noticeTitle(n)}” to ${subs} subscribed phone${subs === 1 ? "" : "s"}?`)) return;
+    setSending(n.id);
+    try {
+      const res = await fetch("/api/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ noticeId: n.id }),
+      });
+      const j = await res.json();
+      if (!res.ok) toast(j.error || "Could not send", true);
+      else {
+        const unreachable = j.failed - j.removed;
+        toast(
+          `Notification sent to ${j.sent} phone${j.sent === 1 ? "" : "s"}` +
+            (j.removed ? ` · ${j.removed} had turned notifications off (removed)` : "") +
+            (unreachable ? ` · ${unreachable} could not be reached` : ""),
+        );
+      }
+      push.refresh();
+    } catch {
+      toast("No internet connection — not sent", true);
+    }
+    setSending(null);
+  };
   const current = db.notices.filter((n) => !n.expiresOn || n.expiresOn >= today);
   const expired = db.notices.filter((n) => n.expiresOn && n.expiresOn < today);
 
@@ -81,6 +128,11 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
               <button className="btn btn-sm" onClick={() => onSendToAll(n.id)}>
                 <span className="text-[#1a9e4b]">●</span> Send to each owner
               </button>
+              {pushOn && subs > 0 && (
+                <button className="btn btn-sm" onClick={() => notifyPhones(n)} disabled={sending === n.id}>
+                  🔔 {sending === n.id ? "Sending…" : "Notify phones"}
+                </button>
+              )}
             </>
           )}
         </div>
@@ -99,6 +151,13 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
           notice date, <strong>once</strong>, or <strong>not at all</strong> (only in the Notices tab). After its end date a notice is
           hidden from residents automatically. Notices with no end date stay in the Notices tab.
         </p>
+        <p className="mt-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">
+          {!push.info
+            ? "🔔 Checking phone notifications…"
+            : pushOn
+              ? `🔔 ${subs} phone${subs === 1 ? "" : "s"} subscribed to notifications. Residents are asked to turn them on after the notice pop-ups, or from the Notices tab.`
+              : "🔕 Phone notifications are not set up: add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Vercel (see docs/VERCEL_SETUP.md)."}
+        </p>
       </div>
       {current.length === 0 && <p className="card p-6 text-center text-ink-2">No notices showing right now.</p>}
       {current.map((n) => card(n, false))}
@@ -110,7 +169,7 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
           {showExpired && <div className="mt-3 space-y-3">{expired.map((n) => card(n, true))}</div>}
         </div>
       )}
-      {editing && <NoticeSheet notice={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
+      {editing && <NoticeSheet notice={editing === "new" ? null : editing} subscribers={pushOn ? subs : null} onClose={() => setEditing(null)} />}
     </div>
   );
 }
@@ -121,7 +180,7 @@ const POPUP_OPTIONS: { v: PopupMode; title: string; hint: string }[] = [
   { v: "none", title: "📌 Don’t pop up", hint: "Only listed in the Notices tab." },
 ];
 
-function NoticeSheet({ notice, onClose }: { notice: Notice | null; onClose: () => void }) {
+function NoticeSheet({ notice, subscribers, onClose }: { notice: Notice | null; subscribers: number | null; onClose: () => void }) {
   const { run } = useAdmin();
   const [f, setF] = useState({
     titleEn: notice?.titleEn ?? "",
@@ -132,16 +191,20 @@ function NoticeSheet({ notice, onClose }: { notice: Notice | null; onClose: () =
     popupMode: (notice?.popupMode ?? "once") as PopupMode,
     expiresOn: notice?.expiresOn ?? "",
     keep: notice ? !notice.expiresOn : false,
+    // New notices notify phones by default; edits only if ticked.
+    notify: !notice,
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   const needsDate = f.popupMode === "every" || !f.keep;
   const dateMissing = needsDate && !f.expiresOn;
   const save = async () => {
-    const { keep, ...rest } = f;
+    const { keep, notify: tick, ...rest } = f;
     const payload = { ...rest, expiresOn: keep && f.popupMode !== "every" ? undefined : f.expiresOn || undefined };
+    const notify = tick && !!subscribers;
+    const sent = notify ? ` · notifying ${subscribers} phone${subscribers === 1 ? "" : "s"}` : "";
     const ok = notice
-      ? await run({ type: "notice.update", id: notice.id, notice: payload }, "Notice saved — residents will see it again")
-      : await run({ type: "notice.add", notice: payload }, "Notice posted");
+      ? await run({ type: "notice.update", id: notice.id, notice: payload, notify }, `Notice saved — residents will see it again${sent}`)
+      : await run({ type: "notice.add", notice: payload, notify }, `Notice posted${sent}`);
     if (ok) onClose();
   };
   return (
@@ -216,6 +279,12 @@ function NoticeSheet({ notice, onClose }: { notice: Notice | null; onClose: () =
         <input type="checkbox" className="h-5 w-5" checked={f.important} onChange={(e) => set("important", e.target.checked)} />
         Mark as important (red)
       </label>
+      {subscribers !== null && (
+        <label className="mt-2 flex items-center gap-2 text-sm font-semibold">
+          <input type="checkbox" className="h-5 w-5" checked={f.notify && subscribers > 0} disabled={subscribers === 0} onChange={(e) => set("notify", e.target.checked)} />
+          🔔 {subscribers > 0 ? `Send a notification to ${subscribers} subscribed phone${subscribers === 1 ? "" : "s"}` : "Send a notification (no phones subscribed yet)"}
+        </label>
+      )}
 
       <div className="mt-4 flex gap-2">
         {notice && (
