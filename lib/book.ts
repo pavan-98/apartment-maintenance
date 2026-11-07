@@ -49,6 +49,10 @@ export interface BookSheet {
   printedNames?: string;
   printedExpenses?: string;
   printedNotPaid?: string;
+  /** When the page was last synced from the app. */
+  syncedAt?: string;
+  /** The note the last sync wrote, so a later sync only replaces it if nobody edited it. */
+  syncedNote?: string;
   createdAt: string;
   updatedAt: string;
   updatedBy: string;
@@ -85,6 +89,7 @@ export interface BookSheetInput {
 export type BookAction =
   | { type: "sheet.create"; month: MonthKey; pageNo?: string }
   | { type: "sheet.save"; id: string; sheet: BookSheetInput }
+  | { type: "sheet.sync"; id: string }
   | { type: "sheet.delete"; id: string }
   | { type: "sheet.printed"; id: string; part: BookPart };
 
@@ -167,6 +172,15 @@ function notPaidList(v: unknown, flats: string[]): string[] {
   return flats.filter((f) => ids.includes(f)); // keep page order
 }
 
+/** Keeps a list within what fits on the page by adding up the last lines into one. */
+function fitLines(lines: BookLineInput[], max: number, label: string): BookLineInput[] {
+  lines = lines.map((l) => ({ ...l, label: String(l.label ?? "").slice(0, 120), note: l.note?.slice(0, 120) }));
+  if (lines.length <= max) return lines;
+  const rest = lines.slice(max - 1);
+  const amount = rest.reduce((a, l) => a + Number(l.amount ?? 0), 0);
+  return [...lines.slice(0, max - 1), { label: `${label} (${rest.length} items)`, amount, note: rest.map((l) => l.label).join(", ").slice(0, 120) }];
+}
+
 function findSheet(book: BookDB, id: unknown): BookSheet {
   const s = book.sheets.find((x) => x.id === id);
   if (!s) throw new ActionError("Book page not found");
@@ -226,6 +240,27 @@ export function applyBookAction(book: BookDB, db: DB, action: BookAction, by: st
         updatedBy: by,
       });
     }
+    case "sheet.sync": {
+      // Copy everything from the app: names, money, expenses, previous balance and not-paid flats.
+      const cur = findSheet(book, action.id);
+      const f = figuresFromApp(db, cur.month, now);
+      const rows = rowsFromFlats(db);
+      const keepNote = cur.notes && cur.notes !== cur.syncedNote;
+      return replace({
+        ...cur,
+        rows,
+        collected: f.collected === null ? null : money(f.collected, "Maintenance collected", true),
+        income: fitLines(f.income, MAX_INCOME, "Other money received").map((l) => line(l, "Money received")),
+        expenses: fitLines(f.expenses, MAX_EXPENSES, "Other expenses").map((l) => line(l, "Expense")),
+        previousBalance: f.previousBalance,
+        notPaid: notPaidList(f.notPaid, rows.map((r) => r.flatId)),
+        notes: keepNote ? cur.notes : optText(f.notes, "Notes", 600),
+        syncedNote: optText(f.notes, "Notes", 600),
+        syncedAt: at,
+        updatedAt: at,
+        updatedBy: by,
+      });
+    }
     case "sheet.delete": {
       findSheet(book, action.id);
       return { ...book, sheets: book.sheets.filter((s) => s.id !== action.id) };
@@ -249,6 +284,7 @@ export function checkBookPermission(book: BookDB, role: Role, action: BookAction
     case "sheet.create":
       return action.month === cur ? null : "Managers can only make the current month’s page.";
     case "sheet.save":
+    case "sheet.sync":
       return book.sheets.find((s) => s.id === action.id)?.month === cur ? null : "Managers can only change the current month’s page.";
     case "sheet.printed":
       return null;

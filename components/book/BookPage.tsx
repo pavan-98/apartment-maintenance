@@ -11,7 +11,7 @@ import { bookTotals, type BookSheet } from "@/lib/book";
  *
  *   names    → header, flat rows (sign + amount by hand), empty expenses box, footer
  *   expenses → only the contents of the expenses box (optionally with the not-paid marks)
- *   notPaid  → only the not-paid marks: a red row and NOT PAID in the amount column
+ *   notPaid  → only the not-paid marks: a red outline round the row and NOT PAID in the amount column
  *   full     → everything (a fresh copy, or a PDF)
  */
 export type PrintPart = "names" | "expenses" | "notPaid" | "full";
@@ -39,7 +39,6 @@ const COLS = [
 const mm = (n: number) => `${n}mm`;
 /** The note prints in red so it stands out on a colour printer (dark enough to read in black and white too). */
 const NOTE_RED = "#c40000";
-const ROW_RED = "#ffd2d2";
 const EXACT: CSSProperties = { printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" };
 
 function Box({ x, y, w, h, style, className, children }: { x: number; y: number; w: number; h?: number; style?: CSSProperties; className?: string; children?: ReactNode }) {
@@ -76,12 +75,12 @@ export function BookPage({
 
   return (
     <div className="book-page" style={{ position: "relative", width: mm(W), height: "296mm", background: "#fff", color: "#000", overflow: "hidden", fontFamily: "Arial, 'Noto Sans Telugu', sans-serif", ...EXACT }}>
-      {/* ---------- not-paid marks: drawn first so the names sit on top of the red ---------- */}
+      {/* ---------- not-paid marks: a thin red outline (no ink-heavy fill) + NOT PAID ---------- */}
       <div className={marksCls}>
         {sheet.rows.map((r, i) =>
           sheet.notPaid.includes(r.flatId) ? (
             <div key={r.flatId}>
-              <Box x={X + 0.3} y={TABLE_Y + HEAD_H + i * rowH + 0.3} w={CW - 0.6} h={rowH - 0.6} style={{ background: ROW_RED, ...EXACT }} />
+              <Box x={X + 0.5} y={TABLE_Y + HEAD_H + i * rowH + 0.5} w={CW - 1} h={rowH - 1} style={{ border: `0.7mm solid ${NOTE_RED}`, borderRadius: "0.8mm", boxSizing: "border-box", ...EXACT }} />
               <Box
                 x={X + CW - COLS[4].w}
                 y={TABLE_Y + HEAD_H + i * rowH}

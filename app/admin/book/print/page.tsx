@@ -13,7 +13,7 @@ import { ScaledPage } from "@/components/book/ScaledPage";
 const PARTS: { v: PrintPart; l: string; d: string }[] = [
   { v: "names", l: "1 · Names", d: "Blank sheet: names to sign, amounts by hand" },
   { v: "expenses", l: "2 · Expenses", d: "Same sheet again: prints only the box at the bottom" },
-  { v: "notPaid", l: "3 · Not paid", d: "Same sheet again: red rows and NOT PAID" },
+  { v: "notPaid", l: "3 · Not paid", d: "Same sheet again: red outline and NOT PAID" },
   { v: "full", l: "Full page", d: "Everything on a fresh sheet, or save as PDF" },
 ];
 
@@ -109,7 +109,7 @@ export default function BookPrintPage() {
             <span>
               <strong className="text-crit-ink">Also mark not paid in this print</strong>
               <span className="block text-xs text-ink-2">
-                {sheet.notPaid.join(", ")}: red row and NOT PAID in the amount column. Leave it off if you’ll mark them later with “3 · Not paid”.
+                {sheet.notPaid.join(", ")}: red outline round the row and NOT PAID in the amount column. Leave it off if you’ll mark them later with “3 · Not paid”.
               </span>
             </span>
           </label>
@@ -118,7 +118,7 @@ export default function BookPrintPage() {
           <div className="rounded-xl border border-dashed border-brand bg-brand-soft p-3 text-sm text-ink-2">
             <p className="font-bold text-brand">Printing on the sheet that was already signed</p>
             <ol className="mt-1 list-decimal space-y-0.5 pl-5">
-              <li>First print once on a plain sheet and hold it against the signed sheet up to the light. {part === "notPaid" ? "The red rows" : "The box"} should line up.</li>
+              <li>First print once on a plain sheet and hold it against the signed sheet up to the light. {part === "notPaid" ? "The red outlines" : "The box"} should line up.</li>
               <li>Put the signed sheet back the same way as the blank sheet went in the first time: same side, top edge first. Not sure which side your printer prints on? Draw an arrow on a plain sheet, print on it and look.</li>
               <li>Only the {part === "notPaid" ? "not-paid marks print" : withMarks ? "expenses box and the not-paid marks print" : "expenses box prints"}. The faded part on screen is left blank on paper.</li>
             </ol>

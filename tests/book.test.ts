@@ -101,6 +101,44 @@ describe("offline book pages", () => {
     expect(book.sheets[0].printedNotPaid).toBe(NOW.toISOString());
   });
 
+  it("syncs a page with the app: names, money, expenses, previous balance and not paid", () => {
+    let book = withPage();
+    const id = book.sheets[0].id;
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { rows: [{ flatId: "101", name: "Old name" }], collected: 1 } }, "A", NOW);
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "A", NOW);
+    const s = book.sheets[0];
+    expect(s.rows).toHaveLength(15);
+    expect(s.rows[0].name).toBe("K. Suresh");
+    expect(bookTotals(s)).toMatchObject({ collected: 19500, spent: 20100, closing: -600 });
+    expect(s.previousBalance).toBe(0);
+    expect(s.notPaid).toEqual(["102", "202"]);
+    expect(s.notes).toBe("Not paid: 102, 202");
+    expect(s.syncedAt).toBe(NOW.toISOString());
+  });
+
+  it("sync keeps a note you wrote yourself, but refreshes its own", () => {
+    let book = withPage();
+    const id = book.sheets[0].id;
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "A", NOW);
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { notes: "Please check with the treasurer" } }, "A", NOW);
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "A", NOW);
+    expect(book.sheets[0].notes).toBe("Please check with the treasurer");
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { notes: "" } }, "A", NOW);
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "A", NOW);
+    expect(book.sheets[0].notes).toBe("Not paid: 102, 202");
+  });
+
+  it("sync adds up extra expenses into one line when the app has more than fit", () => {
+    let many = db;
+    for (let i = 0; i < 15; i++) many = { ...many, expenses: [...many.expenses, { id: `x${i}`, month: "2026-10", category: "Misc", label: `Extra ${i}`, amount: 10, createdAt: "" }] };
+    let book = withPage();
+    book = applyBookAction(book, many, { type: "sheet.sync", id: book.sheets[0].id }, "A", NOW);
+    const s = book.sheets[0];
+    expect(s.expenses).toHaveLength(18);
+    expect(s.expenses[17].label).toMatch(/^Other expenses \(\d+ items\)$/);
+    expect(bookTotals(s).spent).toBe(20100 + 150);
+  });
+
   it("managers: current month only, and they can't delete", () => {
     const oct = withPage("2026-10");
     const id = oct.sheets[0].id;
@@ -108,6 +146,7 @@ describe("offline book pages", () => {
     expect(checkBookPermission(oct, "manager", { type: "sheet.create", month: "2026-10" }, NOW)).toMatch(/current month/);
     expect(checkBookPermission(oct, "manager", { type: "sheet.save", id, sheet: {} }, NOW)).toMatch(/current month/);
     expect(checkBookPermission(oct, "manager", { type: "sheet.printed", id, part: "names" }, NOW)).toBeNull();
+    expect(checkBookPermission(oct, "manager", { type: "sheet.sync", id }, NOW)).toMatch(/current month/);
     expect(checkBookPermission(oct, "manager", { type: "sheet.delete", id }, NOW)).toMatch(/main admin/);
     expect(checkBookPermission(oct, "owner", { type: "sheet.delete", id }, NOW)).toBeNull();
   });

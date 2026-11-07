@@ -7,7 +7,6 @@ import { activeMonths, inr } from "@/lib/calc";
 import { addMonths, currentMonth, formatDate, monthLabel } from "@/lib/dates";
 import {
   bookTotals,
-  figuresFromApp,
   hasExpensePart,
   MAX_EXPENSES,
   MAX_INCOME,
@@ -168,7 +167,7 @@ function HowItWorks() {
           Make a page for the month and <strong>print the names</strong>. Each flat gets a row to sign and write the amount and date.
         </li>
         <li>
-          When collection is done, <strong>fill in the expenses</strong> here, or copy them from the app in one tap.
+          When collection is done, <strong>fill in the expenses</strong> here, or tap <strong>Sync with app</strong> to copy everything from the app.
         </li>
         <li>
           Put the <strong>same signed sheet</strong> back in the printer and <strong>print the expenses</strong>. Only the box at the bottom prints; the handwritten top stays as it is.
@@ -224,6 +223,10 @@ function NewSheet({ months, isManager, onCreate }: { months: string[]; isManager
 }
 
 /* ---------- editor ---------- */
+
+function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+}
 
 type Line = { label: string; amount: string; note: string };
 const toLines = (ls: { label?: string; amount?: number | string; note?: string }[]): Line[] =>
@@ -288,17 +291,14 @@ function SheetEditor({
     window.location.href = `/admin/book/print?id=${sheet.id}&part=${part}`;
   };
 
-  const fillFromApp = () => {
-    const hasData = collected.trim() || clean(expenses).length || clean(income).length;
-    if (hasData && !confirm("Replace the money and expenses on this page with the figures from the app?")) return;
-    const f = figuresFromApp(db, sheet.month);
-    setCollected(String(f.collected ?? ""));
-    setIncome(toLines(f.income));
-    setExpenses(toLines(f.expenses));
-    setPrev(f.previousBalance === null ? "" : String(f.previousBalance));
-    if (!notes.trim()) setNotes(f.notes ?? "");
-    setNotPaid(f.notPaid.filter((id) => rows.some((r) => r.flatId === id)));
-    setDirty(true);
+  const syncWithApp = async () => {
+    const msg = dirty
+      ? "Sync replaces the names, money, expenses and not-paid flats on this page with the app’s. Your unsaved changes here will be lost. Continue?"
+      : "Sync replaces the names, money, expenses and not-paid flats on this page with the app’s. Continue?";
+    if (!confirm(msg)) return;
+    setBusy(true);
+    await run({ type: "sheet.sync", id: sheet.id }, "Synced with the app");
+    setBusy(false);
   };
 
   const templates = db.settings.expenseTemplates.filter((t) => !expenses.some((e) => e.label.trim() === t.label));
@@ -316,6 +316,22 @@ function SheetEditor({
       </div>
       {!canEdit && (
         <p className="rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-ink-2">Managers can print this page but only change the current month’s page.</p>
+      )}
+
+      {canEdit && (
+        <section className="card flex flex-wrap items-center gap-3 p-4">
+          <div className="min-w-0 flex-1">
+            <p className="font-bold">Sync with the app</p>
+            <p className="text-sm text-ink-2">
+              Copies this month from the app: names, maintenance collected, expenses, additional works, previous balance and who hasn’t paid. Sync as often
+              as you like.
+              {sheet.syncedAt && <span className="block text-xs text-muted">Last synced {formatDateTime(sheet.syncedAt)}</span>}
+            </p>
+          </div>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={syncWithApp}>
+            ⟳ Sync with app
+          </button>
+        </section>
       )}
 
       {/* step 1 */}
@@ -361,15 +377,7 @@ function SheetEditor({
 
       {/* step 2 */}
       <section className="card p-4">
-        <SectionTitle
-          action={
-            canEdit && (
-              <button type="button" className="btn btn-sm" onClick={fillFromApp}>
-                ⤓ Fill from app
-              </button>
-            )
-          }
-        >
+        <SectionTitle>
           2 · After collection: expenses & balance
         </SectionTitle>
         <p className="mb-3 text-sm text-ink-2">This prints in the box at the bottom of the same sheet. Leave it empty until collection is done.</p>
@@ -411,7 +419,7 @@ function SheetEditor({
           <div>
             <p className="label">Not paid</p>
             <p className="mb-2 text-xs text-muted">
-              Tap the flats that haven’t paid. On paper their row turns red and the amount column says <strong className="text-crit-ink">NOT PAID</strong>.
+              Tap the flats that haven’t paid. On paper their row gets a red outline and the amount column says <strong className="text-crit-ink">NOT PAID</strong>.
             </p>
             <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-8">
               {rows.map((r) => {
