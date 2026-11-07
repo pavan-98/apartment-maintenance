@@ -13,6 +13,7 @@ import { WorksPanel } from "@/components/admin/WorksPanel";
 import { AuditPanel, FlatsPanel, RulesPanel, SettingsPanel } from "@/components/admin/OtherPanels";
 import { ContactsPanel, NoticesPanel, SendPanel, type SendPreset } from "@/components/admin/MessagingPanels";
 import { TeamPanel } from "@/components/admin/TeamPanel";
+import { PushPanel } from "@/components/admin/PushPanel";
 
 // `owner: true` = main admin only; managers don't see these tabs.
 const TABS = [
@@ -20,6 +21,7 @@ const TABS = [
   { k: "exp", l: "Expenses", i: "🧾", g: "month", monthly: true },
   { k: "works", l: "Additional works", i: "🛠️", g: "month", monthly: true },
   { k: "notices", l: "Notices", i: "📢", g: "people" },
+  { k: "push", l: "Phone notifications", i: "🔔", g: "people" },
   { k: "send", l: "WhatsApp send", i: "💬", g: "people" },
   { k: "phones", l: "Phone numbers", i: "📞", g: "people" },
   { k: "flats", l: "Flats", i: "🏢", g: "people" },
@@ -181,6 +183,7 @@ export default function AdminPage() {
                     }}
                   />
                 )}
+                {activeTab === "push" && <PushPanel db={db} />}
                 {activeTab === "send" && <SendPanel db={db} preset={sendPreset} goContacts={() => setTab("phones")} />}
                 {activeTab === "phones" && <ContactsPanel key={db.version} db={db} />}
                 {activeTab === "flats" && <FlatsPanel db={db} isManager={isManager} />}

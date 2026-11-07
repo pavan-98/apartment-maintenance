@@ -146,6 +146,7 @@ export function NotifyCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const [help, setHelp] = useState(false);
+  const [tested, setTested] = useState<"sent" | "failed" | null>(null);
 
   const s = push.status;
   if (s === "loading" || s === "unsupported" || s === "disabled") return null;
@@ -176,9 +177,28 @@ export function NotifyCard() {
           </button>
         )}
         {s === "on" && (
-          <button className="btn btn-sm" onClick={() => run(push.turnOff)} disabled={busy}>
-            {busy ? t("pleaseWait") : t("notifyTurnOff")}
-          </button>
+          <>
+            <button
+              className="btn btn-sm"
+              disabled={busy}
+              onClick={async () => {
+                setTested(null);
+                setBusy(true);
+                try {
+                  await push.sendTest();
+                  setTested("sent");
+                } catch {
+                  setTested("failed");
+                }
+                setBusy(false);
+              }}
+            >
+              {t("notifyTest")}
+            </button>
+            <button className="btn btn-sm" onClick={() => run(push.turnOff)} disabled={busy}>
+              {t("notifyTurnOff")}
+            </button>
+          </>
         )}
         {s === "needs-install" && (
           <button className="btn btn-primary btn-sm" onClick={() => setHelp(true)}>
@@ -187,6 +207,8 @@ export function NotifyCard() {
         )}
       </div>
       {error && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyFailed")}</p>}
+      {tested === "sent" && s === "on" && <p className="mt-2 text-sm text-ink-2">{t("notifyTestSent")}</p>}
+      {tested === "failed" && s === "on" && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyTestFailed")}</p>}
       <Sheet open={help} onClose={() => setHelp(false)} closeLabel={t("close")} title={t("notifyIosTitle")}>
         <IosSteps />
       </Sheet>

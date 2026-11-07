@@ -31,7 +31,7 @@ async function readJson(req: Request): Promise<unknown> {
 /** A resident turns on notifications on this phone (also re-sent on later visits to keep it fresh). */
 export async function POST(req: Request) {
   if (!vapidKeys()) return NextResponse.json({ error: "Notifications are not set up yet" }, { status: 503 });
-  const sub = parseSubscription(await readJson(req));
+  const sub = parseSubscription(await readJson(req), new Date(), req.headers.get("user-agent"));
   if (!sub) return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
   try {
     await savePushSubscription(subKey(sub.endpoint), JSON.stringify(sub));

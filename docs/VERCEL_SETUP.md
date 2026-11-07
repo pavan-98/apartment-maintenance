@@ -88,6 +88,8 @@ What residents see: after the notice pop-ups, the app asks them to **turn on not
 
 When you post a notice, **Send a notification to N subscribed phones** is ticked. Any current notice also has a **🔔 Notify phones** button to send it again.
 
+**Admin → 🔔 Phone notifications** sends your own message (not tied to a notice) in English and Telugu, with ready-made texts for a maintenance reminder, water supply and meetings. It also lists every subscribed phone (device, language, browser or installed app) with the result of the last notification, a **Send test** button and **Remove**. Residents can also tap **Send a test** in the Notices tab on their own phone.
+
 ## Step 6 — Trial run, then start fresh
 
 1. Open `https://<your-project>.vercel.app`. You'll see sample data (made-up names) and a few sample notices and rules.

@@ -25,7 +25,7 @@ Built for a 15-flat building in India, with English and **Telugu** throughout, â
 - **Notices** in English and Telugu. Each one pops up *every time the app is opened until its date*, *once*, or *not at all*. Notices are hidden automatically after their end date. All notices can be printed for the notice board or shared on WhatsApp.
 - **Rules**, bilingual and grouped by topic, with an optional one-time pop-up when a rule changes. They can be printed or shared.
 - English / Telugu switch, a WhatsApp monthly summary, and a printable monthly statement.
-- **Phone notifications** for new notices (free web push, optional). After the notice pop-ups, residents are asked to turn on notifications and install the app; it works straight from the browser on Android and computers, and from the Home Screen app on iPhone.
+- **Phone notifications** for new notices (free web push, optional). After the notice pop-ups, residents are asked to turn on notifications and install the app; it works straight from the browser on Android and computers, and from the Home Screen app on iPhone. Admins can also send their own notifications and see every subscribed phone with a test button.
 - **Installable** as an app (no automatic install prompt) and works offline with the last loaded data. Light mode only, for readability.
 
 ### For admins (`/admin`)

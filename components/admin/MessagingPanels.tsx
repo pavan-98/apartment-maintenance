@@ -155,7 +155,7 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
           {!push.info
             ? "🔔 Checking phone notifications…"
             : pushOn
-              ? `🔔 ${subs} phone${subs === 1 ? "" : "s"} subscribed to notifications. Residents are asked to turn them on after the notice pop-ups, or from the Notices tab.`
+              ? `🔔 ${subs} phone${subs === 1 ? "" : "s"} subscribed to notifications. See each phone, send tests or your own message in 🔔 Phone notifications.`
               : "🔕 Phone notifications are not set up: add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Vercel (see docs/VERCEL_SETUP.md)."}
         </p>
       </div>

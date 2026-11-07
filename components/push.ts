@@ -47,7 +47,7 @@ async function save(sub: PushSubscription, lang: Lang): Promise<boolean> {
     const res = await fetch("/api/push", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscription: sub.toJSON(), lang }),
+      body: JSON.stringify({ subscription: sub.toJSON(), lang, installed: isStandalone() }),
     });
     return res.ok;
   } catch {
@@ -133,6 +133,36 @@ async function turnOff() {
   set("off");
 }
 
+/** Send a test notification to this phone. Throws if it could not be sent. */
+async function sendTest() {
+  const reg = await navigator.serviceWorker.getRegistration("/");
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) throw new Error("not subscribed");
+  const res = await fetch("/api/push/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint }),
+  });
+  const j = (await res.json().catch(() => ({}))) as { sent?: number };
+  if (!res.ok || !j.sent) throw new Error("not sent");
+}
+
+/** The admin-screen id of this browser's subscription (same hash the server uses), or null. */
+export async function currentDeviceId(): Promise<string | null> {
+  try {
+    if (!("serviceWorker" in navigator) || !crypto.subtle) return null;
+    const reg = await navigator.serviceWorker.getRegistration("/");
+    const sub = await reg?.pushManager.getSubscription();
+    if (!sub) return null;
+    const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(sub.endpoint)));
+    let bin = "";
+    for (const b of hash) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "").slice(0, 32);
+  } catch {
+    return null;
+  }
+}
+
 export function usePush(lang: Lang) {
   const [, rerender] = useState(0);
   useEffect(() => {
@@ -146,5 +176,5 @@ export function usePush(lang: Lang) {
   useEffect(() => {
     if (status === "on") sync(lang).catch(() => undefined);
   }, [lang, status]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { status, turnOn: () => turnOn(lang), turnOff };
+  return { status, turnOn: () => turnOn(lang), turnOff, sendTest };
 }

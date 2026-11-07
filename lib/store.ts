@@ -20,7 +20,9 @@ interface Backend {
   /** Push subscriptions, keyed by a hash of their endpoint. */
   pushSave(key: string, value: string): Promise<void>;
   pushRemove(keys: string[]): Promise<void>;
-  pushAll(): Promise<string[]>;
+  /** Overwrite entries, but only those that still exist (a phone may have unsubscribed meanwhile). */
+  pushUpdate(entries: Record<string, string>): Promise<void>;
+  pushAll(): Promise<Record<string, string>>;
 }
 
 type DocName = "db" | "book";
@@ -81,9 +83,21 @@ function redisBackend(): Backend | null {
     async pushRemove(keys) {
       if (keys.length) await redis.hdel(PUSH_KEY, ...keys);
     },
+    async pushUpdate(entries) {
+      const flat = Object.entries(entries).flat();
+      if (!flat.length) return;
+      await redis.eval(
+        `for i = 1, #ARGV, 2 do
+           if redis.call('HEXISTS', KEYS[1], ARGV[i]) == 1 then redis.call('HSET', KEYS[1], ARGV[i], ARGV[i + 1]) end
+         end
+         return 1`,
+        [PUSH_KEY],
+        flat,
+      );
+    },
     async pushAll() {
-      const all = (await redis.hgetall<Record<string, string>>(PUSH_KEY)) ?? {};
-      return Object.values(all).map((v) => (typeof v === "string" ? v : JSON.stringify(v)));
+      const all = (await redis.hgetall<Record<string, unknown>>(PUSH_KEY)) ?? {};
+      return Object.fromEntries(Object.entries(all).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]));
     },
   };
 }
@@ -154,8 +168,12 @@ function fileBackend(): Backend {
       editPush((all) => {
         for (const k of keys) delete all[k];
       }),
+    pushUpdate: (entries) =>
+      editPush((all) => {
+        for (const [k, v] of Object.entries(entries)) if (k in all) all[k] = v;
+      }),
     async pushAll() {
-      return Object.values(await readPush());
+      return readPush();
     },
   };
 }
@@ -246,6 +264,11 @@ export async function removePushSubscriptions(keys: string[]) {
   await getBackend().pushRemove(keys);
 }
 
-export async function allPushSubscriptions(): Promise<string[]> {
+export async function updatePushSubscriptions(entries: Record<string, string>) {
+  await getBackend().pushUpdate(entries);
+}
+
+/** Every subscription, keyed by its storage key. */
+export async function allPushSubscriptions(): Promise<Record<string, string>> {
   return getBackend().pushAll();
 }

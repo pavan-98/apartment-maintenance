@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { isPushEndpoint, noticePayload, parseSubscription, subKey } from "@/lib/push";
+import { deviceLabel, isPushEndpoint, messagePayload, noticePayload, parseMessage, parseSubscription, pushService, subKey } from "@/lib/push";
 import type { Notice } from "@/lib/types";
 
 const notice: Notice = {
@@ -66,6 +66,30 @@ describe("push subscriptions", () => {
   });
 });
 
+describe("devices and custom messages", () => {
+  it("names the device from its browser", () => {
+    expect(deviceLabel("Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36")).toBe("Android · Chrome");
+    expect(deviceLabel("Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0 Mobile Safari/537.36")).toBe("Android · Samsung Internet");
+    expect(deviceLabel("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1")).toBe("iPhone · Safari");
+    expect(deviceLabel("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0")).toBe("Windows · Edge");
+    expect(deviceLabel(null)).toBe("Unknown device");
+    expect(pushService("https://web.push.apple.com/x")).toBe("Apple");
+    const s = parseSubscription({ ...sub("https://fcm.googleapis.com/x"), installed: true }, new Date(), "Mozilla/5.0 (Linux; Android 14) Chrome/130.0");
+    expect(s).toMatchObject({ device: "Android · Chrome", installed: true });
+  });
+
+  it("checks an admin's message and writes it per language", () => {
+    expect(parseMessage({ bodyEn: "no title" })).toBe("Please give the notification a title (English or Telugu)");
+    const m = parseMessage({ titleEn: " Meeting today ", bodyEn: "6 pm, terrace", titleTe: "ఈరోజు మీటింగ్", url: "javascript:alert(1)", important: true });
+    expect(m).toMatchObject({ titleEn: "Meeting today", url: "/", important: true });
+    if (typeof m === "string") throw new Error(m);
+    expect(messagePayload(m, "en", "msg-1")).toEqual({ title: "❗ Meeting today", body: "6 pm, terrace", url: "/", tag: "msg-1" });
+    // Telugu title, English body as fallback.
+    expect(messagePayload(m, "te", "msg-1")).toMatchObject({ title: "❗ ఈరోజు మీటింగ్", body: "6 pm, terrace" });
+    expect(parseMessage({ titleEn: "x", url: "/#notices" })).toMatchObject({ url: "/#notices" });
+  });
+});
+
 describe("sending", () => {
   let dir: string;
   beforeEach(() => {
@@ -104,8 +128,31 @@ describe("sending", () => {
     errors.mockRestore();
     expect(r).toEqual({ sent: 1, failed: 2, removed: 1 });
     expect(JSON.parse(calls[0].payload).title).toBe("📢 ఆదివారం నీటి సరఫరా ఉండదు");
-    const left = (await store.allPushSubscriptions()).map((x) => JSON.parse(x).endpoint);
-    expect(left.sort()).toEqual(["https://fcm.googleapis.com/fcm/send/down", "https://fcm.googleapis.com/fcm/send/ok"]);
+    const left = Object.values(await store.allPushSubscriptions()).map((x) => JSON.parse(x));
+    expect(left.map((x) => x.endpoint).sort()).toEqual(["https://fcm.googleapis.com/fcm/send/down", "https://fcm.googleapis.com/fcm/send/ok"]);
+    // Each phone's last result is kept for the admin screen.
+    const last = Object.fromEntries(left.map((x) => [x.endpoint.split("/").pop(), x.last]));
+    expect(last.ok).toMatchObject({ ok: true });
+    expect(last.down).toMatchObject({ ok: false, status: 500 });
+
+    // Sending to chosen phones only.
+    calls.length = 0;
+    const { sendPush, listDevices } = await import("@/lib/pushSend");
+    const okId = subKey("https://fcm.googleapis.com/fcm/send/ok");
+    expect(await sendPush(() => ({ title: "t", body: "", url: "/", tag: "test" }), { only: [okId] })).toEqual({ sent: 1, failed: 0, removed: 0 });
+    expect(calls.map((c) => c.endpoint)).toEqual(["https://fcm.googleapis.com/fcm/send/ok"]);
+    const devices = await listDevices();
+    expect(devices).toHaveLength(2);
+    expect(devices[0]).toMatchObject({ service: "Google", lang: "te" });
+    expect(JSON.stringify(devices)).not.toContain("p256dh");
+  });
+
+  it("does not bring back a phone that unsubscribed while sending", async () => {
+    const store = await import("@/lib/store");
+    await store.savePushSubscription("a", "1");
+    await store.removePushSubscriptions(["a"]);
+    await store.updatePushSubscriptions({ a: "2" });
+    expect(await store.allPushSubscriptions()).toEqual({});
   });
 
   it("does nothing without VAPID keys", async () => {
