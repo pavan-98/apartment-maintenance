@@ -18,22 +18,26 @@ export type PrintPart = "names" | "expenses" | "notPaid" | "full";
 
 // Page geometry (mm).
 const W = 210;
-const X = 12; // left/right margin
-const CW = W - 2 * X; // 186
-const TABLE_Y = 31;
-const HEAD_H = 8;
-const ROWS_H = 138; // space for all flat rows together
-const EXP_Y = 192; // top of the expenses box — fixed so both passes line up
-const EXP_H = 86;
+// A4 only. Wide left margin so a 2-hole punch for an A4 binder (holes ~12 mm
+// from the edge) never touches the writing.
+const X = 25; // left margin (binding side)
+const RIGHT = 10;
+const CW = W - X - RIGHT; // 175
+const TABLE_Y = 30;
+const HEAD_H = 8.5;
+const ROWS_H = 147; // space for all flat rows together (15 flats → 9.8 mm each)
+const EXP_Y = 199; // top of the expenses box — fixed so every pass lines up
+const EXP_H = 84;
 const STRIP_H = 7;
-const FOOT_Y = 284;
+const FOOT_Y = 286.5;
+const SPLIT = 102; // width of the expenses column inside the box
 
 const COLS = [
-  { k: "flat", l: "Flat", w: 15 },
-  { k: "name", l: "Name of the owner / tenant", w: 71 },
+  { k: "flat", l: "Flat", w: 14 },
+  { k: "name", l: "Name of the owner / tenant", w: 64 },
   { k: "date", l: "Date", w: 22 },
-  { k: "sign", l: "Sign", w: 44 },
-  { k: "amount", l: "Amount ₹", w: 34 },
+  { k: "sign", l: "Sign", w: 43 },
+  { k: "amount", l: "Amount ₹", w: 32 },
 ] as const;
 
 const mm = (n: number) => `${n}mm`;
@@ -69,9 +73,9 @@ export function BookPage({
   const expCls = part === "expenses" || part === "full" ? "" : "book-hide";
   const marksCls = part === "notPaid" || part === "full" || (part === "expenses" && marks) ? "" : "book-hide";
   const n = Math.max(1, sheet.rows.length);
-  const rowH = Math.min(9.5, ROWS_H / n);
+  const rowH = Math.min(11, ROWS_H / n);
   const totalY = TABLE_Y + HEAD_H + n * rowH;
-  const nameSize = Math.min(3.9, rowH * 0.45);
+  const nameSize = Math.min(4.2, rowH * 0.42);
 
   return (
     <div className="book-page" style={{ position: "relative", width: mm(W), height: "296mm", background: "#fff", color: "#000", overflow: "hidden", fontFamily: "Arial, 'Noto Sans Telugu', sans-serif", ...EXACT }}>
@@ -97,14 +101,14 @@ export function BookPage({
 
       {/* ---------- pass 1: header, rows, empty box, footer ---------- */}
       <div className={namesCls}>
-        <Box x={X} y={9} w={CW} style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "5.2mm", fontWeight: 800, letterSpacing: "0.02em" }}>{apartmentName}</div>
-          <div style={{ fontSize: "4.2mm", fontWeight: 700, marginTop: "1mm" }}>Monthly maintenance — {monthLabel(sheet.month)}</div>
+        <Box x={X} y={8} w={CW} style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "5.6mm", fontWeight: 800, letterSpacing: "0.02em" }}>{apartmentName}</div>
+          <div style={{ fontSize: "4.4mm", fontWeight: 700, marginTop: "1mm" }}>Monthly maintenance — {monthLabel(sheet.month)}</div>
         </Box>
-        <Box x={X} y={22.5} w={CW / 2} style={{ fontSize: "3.2mm" }}>
+        <Box x={X} y={22} w={CW / 2} style={{ fontSize: "3.4mm" }}>
           Maintenance: <strong>{inr(due)}</strong> per flat
         </Box>
-        <Box x={X + CW / 2} y={22.5} w={CW / 2} style={{ fontSize: "3.2mm", textAlign: "right" }}>
+        <Box x={X + CW / 2} y={22} w={CW / 2} style={{ fontSize: "3.4mm", textAlign: "right" }}>
           Page No. <strong style={{ display: "inline-block", minWidth: "14mm", borderBottom: "0.3mm solid #000", textAlign: "center" }}>{sheet.pageNo ?? ""}</strong>
         </Box>
 
@@ -120,7 +124,7 @@ export function BookPage({
           { x: X, els: [] },
         ).els}
         {/* header row */}
-        <Box x={X} y={TABLE_Y} w={CW} h={HEAD_H} style={{ display: "flex", borderBottom: "0.4mm solid #000", background: "#f2f2f2", fontSize: "3.1mm", fontWeight: 700 }}>
+        <Box x={X} y={TABLE_Y} w={CW} h={HEAD_H} style={{ display: "flex", borderBottom: "0.4mm solid #000", background: "#f2f2f2", fontSize: "3.3mm", fontWeight: 700 }}>
           {COLS.map((c) => (
             <div key={c.k} style={{ width: mm(c.w), display: "flex", alignItems: "center", justifyContent: c.k === "name" ? "flex-start" : "center", paddingLeft: c.k === "name" ? "2mm" : 0 }}>
               {c.l}
@@ -142,7 +146,7 @@ export function BookPage({
           </Box>
         ))}
         {/* total row, filled in by hand */}
-        <Box x={X} y={totalY} w={CW} h={HEAD_H} style={{ display: "flex", alignItems: "center", borderTop: "0.4mm solid #000", fontSize: "3.3mm", fontWeight: 700 }}>
+        <Box x={X} y={totalY} w={CW} h={HEAD_H} style={{ display: "flex", alignItems: "center", borderTop: "0.4mm solid #000", fontSize: "3.5mm", fontWeight: 700 }}>
           <div style={{ width: mm(CW - COLS[4].w), textAlign: "right", paddingRight: "3mm" }}>Total collected</div>
           <div style={{ width: 0, alignSelf: "stretch", borderLeft: "0.25mm solid #000" }} />
         </Box>
@@ -154,14 +158,14 @@ export function BookPage({
           y={EXP_Y}
           w={CW}
           h={STRIP_H}
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 3mm", borderBottom: "0.4mm solid #000", background: "#f2f2f2", fontSize: "3.2mm", fontWeight: 700 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 3mm", borderBottom: "0.4mm solid #000", background: "#f2f2f2", fontSize: "3.4mm", fontWeight: 700 }}
         >
           <span>Expenses</span>
           <span>Balance</span>
         </Box>
-        <Box x={X + 110} y={EXP_Y} w={0} h={EXP_H} style={{ borderLeft: "0.25mm solid #000" }} />
+        <Box x={X + SPLIT} y={EXP_Y} w={0} h={EXP_H} style={{ borderLeft: "0.25mm solid #000" }} />
 
-        <Box x={X} y={FOOT_Y} w={CW} style={{ display: "flex", justifyContent: "space-between", fontSize: "3.1mm" }}>
+        <Box x={X} y={FOOT_Y} w={CW} style={{ display: "flex", justifyContent: "space-between", fontSize: "3.2mm" }}>
           <span>Prepared by: ____________________</span>
           <span>Checked by: ____________________</span>
           <span>Date: ____________</span>
@@ -182,7 +186,7 @@ function ExpenseContents({ sheet }: { sheet: BookSheet }) {
   const bottom = EXP_Y + EXP_H - 1.5;
 
   // Left column: expense lines (a line with a note gets a second, smaller row), then the total.
-  const leftW = 110 - 6;
+  const leftW = SPLIT - 6;
   const weight = (note?: string) => (note ? 1.65 : 1);
   const units = Math.max(1, sheet.expenses.reduce((a, e) => a + weight(e.note), 0));
   const unit = Math.max(3.6, Math.min(6, (bottom - top - 8) / units));
@@ -198,8 +202,8 @@ function ExpenseContents({ sheet }: { sheet: BookSheet }) {
   const listEnd = y;
 
   // Right column: the balance sum, then notes.
-  const rx = X + 110 + 3;
-  const rw = CW - 110 - 6;
+  const rx = X + SPLIT + 3;
+  const rw = CW - SPLIT - 6;
   const rows: { l: string; v: string; bold?: boolean; line?: boolean; big?: boolean }[] = [];
   if (sheet.collected !== null) rows.push({ l: "Maintenance collected", v: inr(t.collected) });
   for (const l of sheet.income) rows.push({ l: `+ ${l.label}`, v: inr(l.amount) });

@@ -124,10 +124,19 @@ export default function BookPrintPage() {
             </ol>
           </div>
         )}
-        <p className="text-xs text-muted">
-          Printer settings: paper <strong>A4</strong>, scale <strong>100%</strong> (“Actual size”, not “Fit to page”), margins <strong>Default</strong> or
-          <strong> None</strong>, headers and footers off. Use the same settings every time.
-        </p>
+        <div className="rounded-xl border-2 border-warn-ink/30 bg-warn-bg px-3 py-2.5 text-sm text-warn-ink">
+          <p className="font-bold">In the print window, check these every time:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            <li>
+              <strong>Scale: Default</strong> (or Custom <strong>100</strong>). If it says “Customised 85” or “Fit to page”, the page prints smaller and the
+              later prints won’t line up.
+            </li>
+            <li>
+              Paper size <strong>A4</strong>, margins <strong>Default</strong>, headers and footers <strong>off</strong>.
+            </li>
+          </ul>
+          <p className="mt-1 text-xs">The left side has a wide margin for a 2-hole punch, so the page fits an A4 binder.</p>
+        </div>
         {blocked ? (
           <p className="rounded-xl bg-warn-bg px-3 py-2 text-sm font-semibold text-warn-ink">
             {part === "notPaid" ? "No flats are marked as not paid." : "Nothing to print in the expenses box yet."}{" "}
