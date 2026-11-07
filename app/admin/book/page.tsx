@@ -404,8 +404,8 @@ function SheetEditor({
             <LinesEditor lines={income} onChange={touch(setIncome)} max={MAX_INCOME} placeholder="e.g. Pest control received" />
           </div>
 
-          <Field label="Note" hint="Printed in the box, e.g. who hasn’t paid or something to check">
-            <textarea className="input min-h-[4.5rem]" value={notes} maxLength={600} onChange={(e) => touch(setNotes)(e.target.value)} placeholder="Not paid: 102, 202" />
+          <Field label="Note" hint="Printed in red in the box, e.g. who hasn’t paid or something to check">
+            <textarea className="input min-h-[4.5rem] font-semibold text-crit-ink" value={notes} maxLength={600} onChange={(e) => touch(setNotes)(e.target.value)} placeholder="Not paid: 102, 202" />
           </Field>
 
           <div className="rounded-xl bg-surface-2 p-3 text-sm">

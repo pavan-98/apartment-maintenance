@@ -36,6 +36,8 @@ const COLS = [
 ] as const;
 
 const mm = (n: number) => `${n}mm`;
+/** The note prints in red so it stands out on a colour printer (dark enough to read in black and white too). */
+const NOTE_RED = "#c40000";
 
 function Box({ x, y, w, h, style, className, children }: { x: number; y: number; w: number; h?: number; style?: CSSProperties; className?: string; children?: ReactNode }) {
   return (
@@ -218,8 +220,8 @@ function ExpenseContents({ sheet }: { sheet: BookSheet }) {
         </Box>
       ))}
       {sheet.notes && (
-        <Box x={rx} y={top + rows.length * rlh + 2} w={rw} h={bottom - (top + rows.length * rlh + 2)} style={{ fontSize: "2.9mm", lineHeight: 1.35, overflow: "hidden", whiteSpace: "pre-wrap" }}>
-          <strong>Note: </strong>
+        <Box x={rx} y={top + rows.length * rlh + 2} w={rw} h={bottom - (top + rows.length * rlh + 2)} style={{ fontSize: "3.2mm", lineHeight: 1.35, fontWeight: 600, color: NOTE_RED, overflow: "hidden", whiteSpace: "pre-wrap", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+          <strong style={{ fontWeight: 800 }}>Note: </strong>
           {sheet.notes}
         </Box>
       )}
