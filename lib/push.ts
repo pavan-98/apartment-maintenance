@@ -7,8 +7,10 @@ export interface StoredSub {
   endpoint: string;
   keys: { p256dh: string; auth: string };
   lang: Lang;
-  /** When the phone subscribed (or last re-sent its subscription). */
+  /** Last time the device checked in (it re-sends its subscription whenever the app is opened). */
   at: string;
+  /** When the device first subscribed. */
+  since?: string;
   /** e.g. "Android · Chrome", from the browser's user agent. */
   device?: string;
   /** Opened as the installed app (Home Screen) rather than a browser tab. */
@@ -26,7 +28,10 @@ export interface DeviceInfo {
   service: string;
   lang: Lang;
   installed: boolean;
+  /** Last seen. */
   at: string;
+  /** First subscribed. */
+  since: string;
   last?: StoredSub["last"];
   /** Set for devices an admin removed. */
   removedAt?: string;
@@ -112,6 +117,7 @@ export function deviceInfo(id: string, s: StoredSub & { removedAt?: string }): D
     lang: s.lang,
     installed: !!s.installed,
     at: s.at,
+    since: s.since ?? s.at,
     last: s.last,
   };
 }

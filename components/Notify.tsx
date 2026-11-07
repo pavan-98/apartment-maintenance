@@ -148,7 +148,19 @@ export function NotifyCard() {
   const [help, setHelp] = useState(false);
 
   const s = push.status;
-  if (s === "loading" || s === "unsupported" || s === "disabled") return null;
+  if (s === "loading" || s === "disabled") return null;
+  if (s === "unsupported") {
+    // Usually an in-app browser (opened from Instagram, Facebook, …): Chrome can receive notifications.
+    if (typeof navigator === "undefined" || !/Android/i.test(navigator.userAgent)) return null;
+    return (
+      <div className="card flex items-center gap-3 p-4 text-sm font-semibold no-print">
+        <span className="text-2xl" aria-hidden>
+          🔔
+        </span>
+        <p>{t("notifyOpenInChrome")}</p>
+      </div>
+    );
+  }
 
   const turnOn = async () => {
     setBusy(true);

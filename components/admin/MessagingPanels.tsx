@@ -18,6 +18,7 @@ import {
   type OutMessage,
 } from "@/lib/whatsapp";
 import { Sheet } from "../Sheet";
+import { useApp } from "../AppProvider";
 import { Field, Group, SectionTitle, useAdmin } from "./ui";
 import { Dropdown, Segmented } from "../Pickers";
 
@@ -54,6 +55,7 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
   const [showExpired, setShowExpired] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
   const { toast } = useAdmin();
+  const { reload } = useApp();
   const push = usePushInfo();
   const pushOn = !!push.info?.enabled;
   const subs = push.info?.subscribers ?? 0;
@@ -79,6 +81,7 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
         );
       }
       push.refresh();
+      reload(); // the send is in the edit history
     } catch {
       toast("No internet connection — not sent", true);
     }

@@ -196,6 +196,15 @@ function flatList(db: DB, ids: unknown): string[] {
 }
 
 /**
+ * Add one entry to the edit history for something that isn't a change to the
+ * records (e.g. sending a notification), keeping the history at its usual size.
+ */
+export function withAuditEntry(db: DB, by: string, action: string, detail: string, now: Date = new Date()): DB {
+  const entry = { id: uid("a"), at: now.toISOString(), by, action, detail };
+  return { ...db, audit: [entry, ...db.audit].slice(0, MAX_AUDIT) };
+}
+
+/**
  * Apply an action to a copy of the database and return the new database.
  * `by` is the admin name recorded in the edit history.
  */

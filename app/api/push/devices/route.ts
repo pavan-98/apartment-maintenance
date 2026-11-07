@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { listDevices, removeDevice, restoreDevice, vapidKeys } from "@/lib/pushSend";
+import { auditPush } from "@/lib/pushAudit";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,9 @@ export async function DELETE(req: Request) {
   if (!session) return NextResponse.json({ error: "Please log in again" }, { status: 401 });
   const id = await readId(req, "id");
   if (!id) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  if (!(await removeDevice(id))) return NextResponse.json({ error: "Device not found" }, { status: 404 });
+  const d = await removeDevice(id);
+  if (!d) return NextResponse.json({ error: "Device not found" }, { status: 404 });
+  await auditPush(session, "Notification device removed", d.device);
   return NextResponse.json({ ok: true });
 }
 
@@ -38,6 +41,8 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: "Please log in again" }, { status: 401 });
   const id = await readId(req, "restore");
   if (!id) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  if (!(await restoreDevice(id))) return NextResponse.json({ error: "Device not found" }, { status: 404 });
+  const d = await restoreDevice(id);
+  if (!d) return NextResponse.json({ error: "Device not found" }, { status: 404 });
+  await auditPush(session, "Notification device added back", d.device);
   return NextResponse.json({ ok: true });
 }

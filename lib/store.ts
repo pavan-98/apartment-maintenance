@@ -34,7 +34,14 @@ type Versioned = { version: number };
 const docKey = (doc: DocName) => `apt:${doc}`;
 const verKey = (doc: DocName) => `apt:${doc}:version`;
 type Table = "push" | "push-removed";
-const tableKey = (t: Table) => (t === "push" ? "apt:push" : "apt:push:removed");
+/**
+ * Preview deployments share the production database, so devices are kept per
+ * environment: a test from a preview build never reaches residents' devices.
+ */
+export function pushNamespace(env: Record<string, string | undefined> = process.env): string {
+  return env.VERCEL_ENV === "production" ? "prod" : env.VERCEL_ENV || "dev";
+}
+const tableKey = (t: Table) => `apt:${t}:${pushNamespace()}`;
 
 /**
  * Find the Upstash REST credentials. Vercel's Upstash integration adds

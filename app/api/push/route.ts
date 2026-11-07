@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readClaims } from "@/lib/auth";
 import { parseSubscription } from "@/lib/push";
-import { saveSubscription, subscriberCount, vapidKeys } from "@/lib/pushSend";
+import { saveSubscription, subscriberCount, TooManyDevices, vapidKeys } from "@/lib/pushSend";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,7 @@ export async function POST(req: Request) {
     const state = await saveSubscription(sub, auto);
     return NextResponse.json({ ok: true, removed: state === "removed" });
   } catch (e) {
+    if (e instanceof TooManyDevices) return NextResponse.json({ error: "Too many devices are subscribed" }, { status: 429 });
     console.error(e);
     return NextResponse.json({ error: "Could not save. Please try again." }, { status: 500 });
   }

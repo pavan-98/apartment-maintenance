@@ -6,7 +6,7 @@ import { isIos, isStandalone } from "./install";
 
 /**
  * Notifications on this phone:
- * - loading: still checking
+ * - loading: still checking (or offline)
  * - unsupported: this browser can't receive push (old browser, in-app browser)
  * - needs-install: iPhone/iPad in a browser tab — push works only from the Home Screen app
  * - disabled: the server has no VAPID keys yet
@@ -58,6 +58,26 @@ function deviceId(): string | undefined {
   }
 }
 
+/** Was this subscription made with the server's current public key? (False after the keys are changed.) */
+function madeWithKey(sub: PushSubscription, key: string): boolean {
+  const k = sub.options?.applicationServerKey;
+  if (!k) return true; // browser doesn't say: assume it's fine
+  const a = new Uint8Array(k);
+  const b = keyBytes(key);
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/**
+ * This browser's subscription, renewed if it was made with old keys (the admin
+ * changed VAPID keys). Permission is already granted, so renewing needs no prompt.
+ */
+async function currentSubscription(reg: ServiceWorkerRegistration): Promise<PushSubscription | null> {
+  const sub = await reg.pushManager.getSubscription();
+  if (!sub || !publicKey || madeWithKey(sub, publicKey)) return sub;
+  await sub.unsubscribe().catch(() => undefined);
+  return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) });
+}
+
 /** Send the subscription to the server. */
 async function save(sub: PushSubscription, lang: Lang, auto = false): Promise<"ok" | "failed"> {
   try {
@@ -71,9 +91,6 @@ async function save(sub: PushSubscription, lang: Lang, auto = false): Promise<"o
     return "failed";
   }
 }
-
-
-
 let syncedLang: Lang | null = null;
 
 /**
@@ -83,7 +100,7 @@ let syncedLang: Lang | null = null;
 async function sync(lang: Lang) {
   if (syncedLang === lang) return;
   const reg = await navigator.serviceWorker.getRegistration("/");
-  const sub = await reg?.pushManager.getSubscription();
+  const sub = reg && (await currentSubscription(reg));
   if (sub && (await save(sub, lang, true)) === "ok") syncedLang = lang;
 }
 
@@ -101,8 +118,8 @@ async function start() {
     const sub = await reg?.pushManager.getSubscription();
     set(sub && Notification.permission === "granted" ? "on" : "off");
   } catch {
-    started = false; // offline: try again next time
-    set("unsupported");
+    started = false; // offline: stay quiet and try again next time
+    set("loading");
   }
 }
 
@@ -116,7 +133,7 @@ async function turnOn(lang: Lang): Promise<PushStatus> {
     }
     if (!publicKey) return status;
     const reg = await registration();
-    const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) }));
+    const sub = (await currentSubscription(reg)) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) }));
     if ((await save(sub, lang)) !== "ok") throw new Error("save failed");
     syncedLang = lang;
     set("on");

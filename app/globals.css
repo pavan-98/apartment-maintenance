@@ -289,13 +289,19 @@ html[data-splash="off"] #splash {
   align-items: center;
 }
 .splash-lead {
+  max-width: 22em;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.6;
   text-transform: uppercase;
   letter-spacing: 0.32em;
+  text-wrap: balance;
   color: rgba(255, 255, 255, 0.78);
   opacity: 0;
   animation: splash-track 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 1.05s forwards;
+}
+.splash-lead[hidden] {
+  display: none;
 }
 .splash-name {
   margin-top: 6px;
@@ -355,14 +361,17 @@ html[data-splash="off"] #splash {
     transform: scale(1);
   }
 }
+/* Fade and settle without changing the layout (a long name keeps its line breaks). */
 @keyframes splash-track {
   from {
     opacity: 0;
-    letter-spacing: 0.6em;
+    transform: translateY(6px) scale(1.04);
+    filter: blur(3px);
   }
   to {
     opacity: 1;
-    letter-spacing: 0.32em;
+    transform: none;
+    filter: none;
   }
 }
 @keyframes splash-rise {

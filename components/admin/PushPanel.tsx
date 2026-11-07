@@ -4,10 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import type { DB } from "@/lib/types";
 import type { DeviceInfo } from "@/lib/push";
 import { OPEN_PAGES } from "@/lib/push";
-import { currentMonth, monthLabel } from "@/lib/dates";
+import { currentMonth, monthLabel, ordinal } from "@/lib/dates";
 import { currentDeviceId } from "../push";
 import { Segmented } from "../Pickers";
 import { Field, SectionTitle, useAdmin } from "./ui";
+import { useApp } from "../AppProvider";
 
 type Form = { titleEn: string; bodyEn: string; titleTe: string; bodyTe: string; url: string; important: boolean };
 const EMPTY: Form = { titleEn: "", bodyEn: "", titleTe: "", bodyTe: "", url: "/", important: false };
@@ -21,7 +22,7 @@ function templates(db: DB): { label: string; form: Form }[] {
       label: "💰 Maintenance reminder",
       form: {
         titleEn: `Maintenance for ${monthLabel(m)}`,
-        bodyEn: `Please pay this month's maintenance by the ${day}th. Thank you 🙏`,
+        bodyEn: `Please pay this month's maintenance by the ${ordinal(day)}. Thank you 🙏`,
         titleTe: `${monthLabel(m, "te")} మెయింటెనెన్స్`,
         bodyTe: `దయచేసి ఈ నెల మెయింటెనెన్స్ ${day}వ తేదీ లోపు చెల్లించండి. ధన్యవాదాలు 🙏`,
         url: "/",
@@ -61,6 +62,8 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 export function PushPanel({ db }: { db: DB }) {
   const { toast } = useAdmin();
+  // Sends and device changes are written to the edit history; refresh so History shows them.
+  const { reload } = useApp();
   const [devices, setDevices] = useState<DeviceInfo[] | null>(null);
   const [removed, setRemoved] = useState<DeviceInfo[]>([]);
   const [enabled, setEnabled] = useState(true);
@@ -86,8 +89,10 @@ export function PushPanel({ db }: { db: DB }) {
     currentDeviceId().then(setMine);
   }, [load]);
 
-  const send = async (key: string, body: unknown, what: string) => {
+  /** Returns true if it reached at least one device. */
+  const send = async (key: string, body: unknown, what: string): Promise<boolean> => {
     setBusy(key);
+    let ok = false;
     try {
       const res = await fetch("/api/push/send", {
         method: "POST",
@@ -102,12 +107,15 @@ export function PushPanel({ db }: { db: DB }) {
         if (j.removed) parts.push(`${j.removed} had turned notifications off (removed)`);
         if (unreachable) parts.push(`${unreachable} could not be reached${j.errors?.[0] ? ` (${j.errors[0]})` : ""}`);
         toast(parts.join(" · "), j.sent === 0);
+        ok = j.sent > 0;
       }
     } catch {
       toast("No internet connection — not sent", true);
     }
     setBusy(null);
     load();
+    reload();
+    return ok;
   };
 
   const remove = async (d: DeviceInfo) => {
@@ -122,6 +130,7 @@ export function PushPanel({ db }: { db: DB }) {
     else toast("Device removed. Add it back any time from “Removed devices”.");
     setBusy(null);
     load();
+    reload();
   };
 
   const restore = async (d: DeviceInfo) => {
@@ -135,6 +144,7 @@ export function PushPanel({ db }: { db: DB }) {
     else toast(`${d.device} added back`);
     setBusy(null);
     load();
+    reload();
   };
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -224,7 +234,8 @@ export function PushPanel({ db }: { db: DB }) {
           disabled={!hasTitle || count === 0 || busy !== null}
           onClick={() => {
             if (!confirm(`Send “${f.titleEn || f.titleTe}” to ${plural(count, "device")}?`)) return;
-            send("msg", { message: f }, "Notification").then(() => setF(EMPTY));
+            // Keep the message if it reached no one, so it can be sent again.
+            send("msg", { message: f }, "Notification").then((ok) => ok && setF(EMPTY));
           }}
         >
           {busy === "msg" ? "Sending…" : count === 0 ? "No devices subscribed yet" : `🔔 Send to ${plural(count, "device")}`}
@@ -262,7 +273,7 @@ export function PushPanel({ db }: { db: DB }) {
                 <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-ink-2">{d.lang === "te" ? "తెలుగు" : "English"}</span>
               </div>
               <p className="mt-1 text-xs text-muted">
-                Subscribed {when(d.at)} · delivered by {d.service}
+                Subscribed {when(d.since)} · last seen {when(d.at)} · delivered by {d.service}
               </p>
               <p className={`mt-1 text-sm ${d.last && !d.last.ok ? "font-semibold text-crit-ink" : "text-ink-2"}`}>
                 {!d.last

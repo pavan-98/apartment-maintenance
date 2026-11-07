@@ -80,15 +80,22 @@ Residents can get a notification on their phone when a notice is posted. It uses
 
 3. Redeploy (Deployments → ⋯ → Redeploy).
 
-Generate the keys **once** and keep them. If they change, every phone has to turn notifications on again.
+Generate the keys **once** and keep them. If you ever do change them, each device renews its subscription by itself the next time the app is opened; until then it can't receive notifications.
 
 What residents see: after the notice pop-ups, the app asks them to **turn on notifications** and **install the app**. "Not now" hides it for a week, and they can turn notifications on later from the top of the **Notices** tab, which shows "Notifications are on for this device" once they are on.
 - **Android and computers** (Chrome, Edge, Firefox, Samsung Internet): works straight from the browser; installing is optional.
 - **iPhone / iPad** (iOS 16.4 or later): only after **Share → Add to Home Screen** and opening the app from the Home Screen. The app shows these steps.
+- **In-app browsers** (a link opened inside Instagram, Facebook, …) can't receive notifications; on Android the app asks the resident to open the page in Chrome.
 
 When you post a notice, **Send a notification to N subscribed devices** is ticked. Any current notice also has a **🔔 Notify devices** button to send it again.
 
-**Admin → 🔔 Notifications** sends your own message (not tied to a notice) in English and Telugu, with ready-made texts for a maintenance reminder, water supply and meetings. It also lists every subscribed device (device type, language, browser or installed app) with the result of the last notification, a **Send test** button and **Remove**. **Remove** moves a device to an expandable **Removed devices** list (it is sent nothing, and shows when it was last seen) with **↩ Add back**; a device that turns them on again replaces its old entry, so each one is listed once.
+**Admin → 🔔 Notifications** sends your own message (not tied to a notice) in English and Telugu, with ready-made texts for a maintenance reminder, water supply and meetings. It also lists every subscribed device (device type, language, browser or installed app) with the result of the last notification, a **Send test** button and **Remove**. **Remove** moves a device to an expandable **Removed devices** list (it is sent nothing, and shows when it was last seen) with **↩ Add back**; a device that turns them on again replaces its old entry, so each one is listed once. Removed devices that haven't opened the app for 90 days are forgotten.
+
+Good to know:
+- **Preview deployments have their own device list.** They share the database with the live site, but a notification sent from a preview build only reaches devices subscribed on preview builds, never residents.
+- **Every send, removal and add back is in Admin → History**, with who did it. Managers can send notifications too.
+- **A notice's notification is delivered only while it matters:** a phone that is off gets it until the end of the notice's last day (at most 3 days). Your own messages are delivered for up to a day, tests for an hour.
+- At most 500 devices can be listed (subscribed + removed), so a script can't flood the list.
 
 ## Step 6 — Trial run, then start fresh
 

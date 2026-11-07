@@ -152,7 +152,7 @@ describe("sending", () => {
     const s = parseSubscription({ ...sub("https://fcm.googleapis.com/fcm/send/removed"), deviceId: "device-r1" })!;
     const id = subKey(s.endpoint);
     await saveSubscription(s);
-    expect(await removeDevice(id)).toBe(true);
+    expect(await removeDevice(id)).toMatchObject({ id });
     let list = await listDevices();
     expect(list.devices).toHaveLength(0);
     expect(list.removed).toMatchObject([{ id, removedAt: expect.any(String) }]);
@@ -177,7 +177,7 @@ describe("sending", () => {
     expect(list.removed[0].id).toBe(id2);
 
     // Admin adds it back.
-    expect(await restoreDevice(id2)).toBe(true);
+    expect(await restoreDevice(id2)).toMatchObject({ id: id2 });
     list = await listDevices();
     expect(list.devices.map((d) => d.id)).toEqual([id2]);
     expect(list.removed).toHaveLength(0);
@@ -187,7 +187,7 @@ describe("sending", () => {
     await removeDevice(id2);
     expect(await saveSubscription(rotated)).toBe("active");
     expect((await listDevices()).removed).toHaveLength(0);
-    expect(await restoreDevice(id2)).toBe(false); // nothing left to add back
+    expect(await restoreDevice(id2)).toBeNull(); // nothing left to add back
   });
 
   it("lists each device once: a new subscription replaces the old one", async () => {
