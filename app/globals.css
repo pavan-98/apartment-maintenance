@@ -182,3 +182,9 @@ body {
   body { background: #fff; color: #000; }
   .card { border-color: #ccc; break-inside: avoid; }
 }
+
+/* Offline book page: the part not being printed stays in place but invisible on paper. */
+.book-hide { opacity: 0.13; }
+@media print {
+  .book-hide { visibility: hidden !important; }
+}

@@ -103,6 +103,12 @@ export default function AdminPage() {
                   {t.l}
                 </button>
               ))}
+              <Link
+                href="/admin/book"
+                className="shrink-0 rounded-full bg-surface px-4 py-2 text-sm font-bold text-ink-2 ring-1 ring-line transition hover:text-ink"
+              >
+                📒 Book pages
+              </Link>
             </nav>
             {"monthly" in tabInfo && tabInfo.monthly && months.length > 1 && (
               <div className="mb-4">

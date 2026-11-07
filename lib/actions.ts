@@ -573,3 +573,6 @@ export function managerView(db: DB): DB {
 export function ownerView(db: DB): DB {
   return { ...db, users: db.users.map((u) => ({ ...u, passwordHash: "" })) };
 }
+
+/** Input checks shared with other record types (e.g. the offline book). */
+export const validators = { uid, text, optText, money, month };

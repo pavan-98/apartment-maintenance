@@ -3,6 +3,7 @@ import path from "node:path";
 import { Redis } from "@upstash/redis";
 import type { DB } from "./types";
 import { demoDB, normalizeDB } from "./seed";
+import { normalizeBook, type BookDB } from "./book";
 
 /**
  * Storage: Upstash Redis when its env vars are present (production on Vercel),
@@ -10,15 +11,18 @@ import { demoDB, normalizeDB } from "./seed";
  */
 interface Backend {
   name: string;
-  read(): Promise<{ db: DB | null; version: number }>;
+  /** Read a stored document ("db" = the main records, "book" = offline book pages). */
+  read<T extends Versioned>(doc: DocName): Promise<{ db: T | null; version: number }>;
   /** Write only if the stored version still equals `expected`. */
-  write(db: DB, expected: number): Promise<boolean>;
+  write<T extends Versioned>(doc: DocName, db: T, expected: number): Promise<boolean>;
   putReceipt(id: string, data: string): Promise<void>;
   getReceipt(id: string): Promise<string | null>;
 }
 
-const DB_KEY = "apt:db";
-const VER_KEY = "apt:db:version";
+type DocName = "db" | "book";
+type Versioned = { version: number };
+const docKey = (doc: DocName) => `apt:${doc}`;
+const verKey = (doc: DocName) => `apt:${doc}:version`;
 
 /**
  * Find the Upstash REST credentials. Vercel's Upstash integration adds
@@ -52,12 +56,12 @@ function redisBackend(): Backend | null {
     return 1`;
   return {
     name: "redis",
-    async read() {
-      const [raw, ver] = await Promise.all([redis.get<string>(DB_KEY), redis.get<string>(VER_KEY)]);
-      return { db: raw ? (JSON.parse(raw) as DB) : null, version: Number(ver ?? 0) };
+    async read<T extends Versioned>(doc: DocName) {
+      const [raw, ver] = await Promise.all([redis.get<string>(docKey(doc)), redis.get<string>(verKey(doc))]);
+      return { db: raw ? (JSON.parse(raw) as T) : null, version: Number(ver ?? 0) };
     },
-    async write(db, expected) {
-      const res = await redis.eval(CAS, [DB_KEY, VER_KEY], [JSON.stringify(db), String(expected), String(expected + 1)]);
+    async write(doc, db, expected) {
+      const res = await redis.eval(CAS, [docKey(doc), verKey(doc)], [JSON.stringify(db), String(expected), String(expected + 1)]);
       return Number(res) === 1;
     },
     async putReceipt(id, data) {
@@ -71,22 +75,23 @@ function redisBackend(): Backend | null {
 
 function fileBackend(): Backend {
   const dir = process.env.DATA_DIR || path.join(process.cwd(), "data");
-  const file = path.join(dir, "db.json");
+  const fileOf = (doc: DocName) => path.join(dir, `${doc}.json`);
   const receipts = path.join(dir, "receipts");
   let lock: Promise<unknown> = Promise.resolve();
   return {
     name: "file",
-    async read() {
+    async read<T extends Versioned>(doc: DocName) {
       try {
-        const db = JSON.parse(await fs.readFile(file, "utf8")) as DB;
-        return { db, version: db.version ?? 0 };
+        const db = JSON.parse(await fs.readFile(fileOf(doc), "utf8")) as T;
+        return { db: db as T | null, version: db.version ?? 0 };
       } catch {
-        return { db: null, version: 0 };
+        return { db: null as T | null, version: 0 };
       }
     },
-    async write(db, expected) {
+    async write(doc, db, expected) {
+      const file = fileOf(doc);
       const run = lock.then(async () => {
-        const cur = await this.read();
+        const cur = await this.read(doc);
         if (cur.version !== expected) return false;
         await fs.mkdir(dir, { recursive: true });
         const tmp = `${file}.${process.pid}.tmp`;
@@ -141,11 +146,11 @@ export function storageName(): string {
 /** Read the database, creating it with the September 2026 sample on first run. */
 export async function loadDB(): Promise<DB> {
   const b = getBackend();
-  const { db, version } = await b.read();
+  const { db, version } = await b.read<DB>("db");
   if (db) return { ...normalizeDB(db), version };
   const seeded = demoDB();
-  await b.write({ ...seeded, version: 0 }, 0);
-  const again = await b.read();
+  await b.write("db", { ...seeded, version: 0 }, 0);
+  const again = await b.read<DB>("db");
   return again.db ? { ...again.db, version: again.version } : seeded;
 }
 
@@ -155,7 +160,25 @@ export async function updateDB(fn: (db: DB) => DB): Promise<DB> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const current = await loadDB();
     const next = fn(current);
-    const ok = await b.write({ ...next, version: current.version + 1 }, current.version);
+    const ok = await b.write("db", { ...next, version: current.version + 1 }, current.version);
+    if (ok) return { ...next, version: current.version + 1 };
+  }
+  throw new Error("Could not save — please try again");
+}
+
+/* ---------- offline book pages: a separate document from the main records ---------- */
+
+export async function loadBook(): Promise<BookDB> {
+  const { db, version } = await getBackend().read<BookDB>("book");
+  return { ...normalizeBook(db), version };
+}
+
+export async function updateBook(fn: (book: BookDB) => BookDB): Promise<BookDB> {
+  const b = getBackend();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const current = await loadBook();
+    const next = fn(current);
+    const ok = await b.write("book", { ...next, version: current.version + 1 }, current.version);
     if (ok) return { ...next, version: current.version + 1 };
   }
   throw new Error("Could not save — please try again");
