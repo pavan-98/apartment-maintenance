@@ -1,5 +1,6 @@
 "use client";
 
+import { MonthNav } from "./Pickers";
 import { useMemo, useState } from "react";
 import type { DB, Flat, MonthKey } from "@/lib/types";
 import { flatHistory, inr, type DuesReport, type FlatMonthStatus, type MonthSummary, type PayStatus } from "@/lib/calc";
@@ -176,34 +177,7 @@ export function DuesAlert({ db, dues }: { db: DB; dues: DuesReport }) {
 
 export function MonthSwitcher({ months, value, onChange }: { months: MonthKey[]; value: MonthKey; onChange: (m: MonthKey) => void }) {
   const { lang, t } = useApp();
-  const i = months.indexOf(value);
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <button className="btn h-11 w-11 p-0" disabled={i <= 0} onClick={() => onChange(months[i - 1])} aria-label={t("prev")}>
-        ‹
-      </button>
-      <label className="relative flex-1 text-center">
-        <span className="sr-only">{t("month")}</span>
-        <select
-          className="w-full cursor-pointer appearance-none rounded-xl bg-transparent px-2 py-1 text-center text-xl font-extrabold"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          {months
-            .slice()
-            .reverse()
-            .map((m) => (
-              <option key={m} value={m}>
-                {monthLabel(m, lang)}
-              </option>
-            ))}
-        </select>
-      </label>
-      <button className="btn h-11 w-11 p-0" disabled={i >= months.length - 1} onClick={() => onChange(months[i + 1])} aria-label={t("next")}>
-        ›
-      </button>
-    </div>
-  );
+  return <MonthNav big months={months} value={value} onChange={onChange} lang={lang} labels={{ prev: t("prev"), next: t("next") }} />;
 }
 
 /* ---------- summary tiles ---------- */

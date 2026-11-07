@@ -5,6 +5,7 @@ import type { MonthKey } from "@/lib/types";
 import type { Action } from "@/lib/actions";
 import { monthLabel, todayISO } from "@/lib/dates";
 import { useApp } from "../AppProvider";
+import { MonthNav, Segmented } from "../Pickers";
 
 /* ---------- toasts + action runner ---------- */
 
@@ -64,19 +65,19 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 
-export function MonthPicker({ months, value, onChange }: { months: MonthKey[]; value: MonthKey; onChange: (m: MonthKey) => void }) {
+/** Like Field, for button-based pickers (a <label> would "click" the first button). */
+export function Group({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
-    <select className="input font-bold" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Month">
-      {months
-        .slice()
-        .reverse()
-        .map((m) => (
-          <option key={m} value={m}>
-            {monthLabel(m)}
-          </option>
-        ))}
-    </select>
+    <div>
+      <span className="label">{label}</span>
+      {children}
+      {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
+    </div>
   );
+}
+
+export function MonthPicker({ months, value, onChange }: { months: MonthKey[]; value: MonthKey; onChange: (m: MonthKey) => void }) {
+  return <MonthNav months={months} value={value} onChange={onChange} />;
 }
 
 export const MODES = [
@@ -87,15 +88,7 @@ export const MODES = [
 ] as const;
 
 export function ModeSelect({ value, onChange }: { value: string; onChange: (v: "cash" | "upi" | "bank" | "other") => void }) {
-  return (
-    <select className="input" value={value} onChange={(e) => onChange(e.target.value as "cash")}>
-      {MODES.map((m) => (
-        <option key={m.v} value={m.v}>
-          {m.l}
-        </option>
-      ))}
-    </select>
-  );
+  return <Segmented label="Payment mode" options={MODES.map((m) => ({ v: m.v, l: m.l }))} value={value as "cash"} onChange={onChange} />;
 }
 
 /** Default payment date: today if it falls in the month, else the 1st of that month. */

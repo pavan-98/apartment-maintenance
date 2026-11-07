@@ -5,7 +5,8 @@ import type { DB, Expense, MonthKey } from "@/lib/types";
 import { inr } from "@/lib/calc";
 import { formatDate, monthLabel } from "@/lib/dates";
 import { Sheet } from "../Sheet";
-import { defaultDateFor, Field, ReceiptInput, SectionTitle, useAdmin } from "./ui";
+import { defaultDateFor, Field, Group, ReceiptInput, SectionTitle, useAdmin } from "./ui";
+import { ChipPicker } from "../Pickers";
 
 const BASE_CATEGORIES = ["Salary", "Electricity", "GVMC & water tank", "Lift maintenance", "Cleaning material", "Repairs", "Water", "Festival", "Misc"];
 
@@ -93,16 +94,14 @@ function ExpenseSheet({ db, month, expense, onClose }: { db: DB; month: MonthKey
   return (
     <Sheet open onClose={onClose} title={expense ? "Edit expense" : `New expense · ${monthLabel(month)}`}>
       <div className="grid gap-3">
-        <Field label="Category">
-          <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-            <option value="__new">+ New category…</option>
-          </select>
-        </Field>
+        <Group label="Category">
+          <ChipPicker
+            label="Category"
+            options={[...categories.map((c) => ({ v: c, l: c })), { v: "__new", l: "+ New category" }]}
+            value={category}
+            onChange={setCategory}
+          />
+        </Group>
         {category === "__new" && (
           <Field label="New category name">
             <input className="input" value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="e.g. Generator diesel" />

@@ -7,7 +7,7 @@ import { compareMonths, formatDate, monthLabel, todayISO } from "@/lib/dates";
 import { flatName } from "@/lib/share";
 import { StatusChip } from "../dashboard";
 import { Sheet } from "../Sheet";
-import { defaultDateFor, Field, ModeSelect, SectionTitle, useAdmin } from "./ui";
+import { defaultDateFor, Field, Group, ModeSelect, SectionTitle, useAdmin } from "./ui";
 
 export function PaymentsPanel({ db, month, isManager }: { db: DB; month: MonthKey; isManager: boolean }) {
   const { run } = useAdmin();
@@ -52,9 +52,9 @@ export function PaymentsPanel({ db, month, isManager }: { db: DB; month: MonthKe
           </div>
         </div>
         <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
-          <Field label="Quick-mark payment mode">
+          <Group label="Quick-mark payment mode">
             <ModeSelect value={mode} onChange={setMode} />
-          </Field>
+          </Group>
           <button
             className="btn"
             disabled={!pendingIds.length}
@@ -220,9 +220,9 @@ function PaymentSheet({
         <Field label="Date">
           <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
-        <Field label="Mode">
+        <Group label="Mode">
           <ModeSelect value={mode} onChange={setMode} />
-        </Field>
+        </Group>
         <Field label="Note (optional)">
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. UPI ref" />
         </Field>

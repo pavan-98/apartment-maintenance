@@ -9,7 +9,8 @@ import { downloadText, ledgerCSV } from "@/lib/export";
 import { whatsappLink } from "@/lib/share";
 import { formatPhone } from "@/lib/phone";
 import { Sheet } from "../Sheet";
-import { Field, SectionTitle, useAdmin } from "./ui";
+import { Field, Group, SectionTitle, useAdmin } from "./ui";
+import { ChipPicker } from "../Pickers";
 
 /* ---------- flats ---------- */
 
@@ -172,15 +173,14 @@ function RuleSheet({ rule, onClose }: { rule: Rule | null; onClose: () => void }
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   return (
     <Sheet open onClose={onClose} title={rule ? "Edit rule" : "New rule"} wide>
-      <Field label="Topic">
-        <select className="input" value={f.category} onChange={(e) => set("category", e.target.value as typeof f.category)}>
-          {RULE_CATEGORIES.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.icon} {c.en} / {c.te}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <Group label="Topic">
+        <ChipPicker
+          label="Topic"
+          options={RULE_CATEGORIES.map((c) => ({ v: c.id, l: `${c.icon} ${c.en}` }))}
+          value={f.category}
+          onChange={(v: typeof f.category) => set("category", v)}
+        />
+      </Group>
       <div className="mt-3 grid gap-4 sm:grid-cols-2">
         <fieldset className="space-y-3 rounded-xl border border-line p-3">
           <legend className="px-1 text-sm font-bold">English</legend>

@@ -21,7 +21,8 @@ import {
 } from "@/lib/book";
 import { useApp } from "@/components/AppProvider";
 import { Header } from "@/components/Header";
-import { AdminToasts, Field, SectionTitle, useAdmin } from "@/components/admin/ui";
+import { AdminToasts, Field, Group, SectionTitle, useAdmin } from "@/components/admin/ui";
+import { Dropdown } from "@/components/Pickers";
 import { useBook } from "@/components/book/useBook";
 
 /** Offline book pages: print the names to sign, later print the expenses on the same sheet. */
@@ -214,15 +215,9 @@ function NewSheet({ months, isManager, onCreate }: { months: string[]; isManager
       }}
     >
       <div className="min-w-[10rem] flex-1">
-        <Field label="New page for">
-          <select className="input font-bold" value={m} onChange={(e) => setMonth(e.target.value)}>
-            {months.map((x) => (
-              <option key={x} value={x}>
-                {monthLabel(x)}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <Group label="New page for">
+          <Dropdown label="New page for" value={m} onChange={setMonth} options={months.map((x) => ({ v: x, l: <strong>{monthLabel(x)}</strong> }))} />
+        </Group>
       </div>
       <div className="w-28">
         <Field label="Page no.">

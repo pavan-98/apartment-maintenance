@@ -71,7 +71,7 @@ function WorkCard({ db, c }: { db: DB; c: SpecialCollection }) {
       </div>
 
       <h4 className="mt-4 mb-2 text-sm font-bold uppercase tracking-wide text-muted">Who has paid</h4>
-      <div className="mb-2 max-w-48">
+      <div className="mb-2 max-w-sm">
         <ModeSelect value={mode} onChange={setMode} />
       </div>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">

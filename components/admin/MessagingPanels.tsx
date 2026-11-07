@@ -18,7 +18,8 @@ import {
   type OutMessage,
 } from "@/lib/whatsapp";
 import { Sheet } from "../Sheet";
-import { Field, SectionTitle, useAdmin } from "./ui";
+import { Field, Group, SectionTitle, useAdmin } from "./ui";
+import { Dropdown, Segmented } from "../Pickers";
 
 function origin() {
   return typeof window === "undefined" ? "" : window.location.origin;
@@ -395,40 +396,59 @@ export function SendPanel({ db, preset, goContacts }: { db: DB; preset: SendPres
       <div className="card p-4">
         <SectionTitle>Send on WhatsApp</SectionTitle>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="What to send">
-            <select className="input" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
-              <option value="reminder">Maintenance reminder (to flats with dues)</option>
-              <option value="notice">A notice</option>
-              <option value="custom">My own message</option>
-            </select>
-          </Field>
-          <Field label="Send to">
-            <select className="input" value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
-              <option value="owners">Owners</option>
-              <option value="residents">People living in the flats (tenants)</option>
-              <option value="both">Owners and tenants</option>
-            </select>
-          </Field>
+          <div className="sm:col-span-2">
+            <Group label="What to send">
+              <Segmented<Kind>
+                stack
+                label="What to send"
+                value={kind}
+                onChange={setKind}
+                options={[
+                  { v: "reminder", l: "Maintenance reminder", hint: "to flats with dues" },
+                  { v: "notice", l: "A notice" },
+                  { v: "custom", l: "My own message" },
+                ]}
+              />
+            </Group>
+          </div>
+          <div className="sm:col-span-2">
+            <Group label="Send to">
+              <Segmented<Audience>
+                label="Send to"
+                value={audience}
+                onChange={setAudience}
+                options={[
+                  { v: "owners", l: "Owners" },
+                  { v: "residents", l: "Tenants", hint: "people living there" },
+                  { v: "both", l: "Both" },
+                ]}
+              />
+            </Group>
+          </div>
           {kind === "notice" && (
-            <Field label="Notice">
-              <select className="input" value={noticeId} onChange={(e) => setNoticeId(e.target.value)}>
-                {db.notices.length === 0 && <option value="">No notices yet</option>}
-                {db.notices.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {noticeTitle(n)}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <Group label="Notice">
+              <Dropdown
+                label="Notice"
+                placeholder="No notices yet"
+                value={noticeId}
+                onChange={setNoticeId}
+                options={db.notices.map((n) => ({ v: n.id, l: noticeTitle(n) }))}
+              />
+            </Group>
           )}
           {kind !== "custom" && (
-            <Field label="Language">
-              <select className="input" value={lang} onChange={(e) => setLang(e.target.value as MsgLang)}>
-                <option value="both">English + Telugu</option>
-                <option value="en">English</option>
-                <option value="te">Telugu</option>
-              </select>
-            </Field>
+            <Group label="Language">
+              <Segmented<MsgLang>
+                label="Language"
+                value={lang}
+                onChange={setLang}
+                options={[
+                  { v: "both", l: "English + Telugu" },
+                  { v: "en", l: "English" },
+                  { v: "te", l: "తెలుగు" },
+                ]}
+              />
+            </Group>
           )}
           {kind === "reminder" && (
             <label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2">
