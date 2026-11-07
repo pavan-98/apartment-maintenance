@@ -17,12 +17,31 @@ interface Backend {
   write<T extends Versioned>(doc: DocName, db: T, expected: number): Promise<boolean>;
   putReceipt(id: string, data: string): Promise<void>;
   getReceipt(id: string): Promise<string | null>;
+  /**
+   * Small key → value tables: "push" = push subscriptions (keyed by a hash of
+   * their endpoint), "push-removed" = phones an admin removed (key → date).
+   */
+  hashSet(table: Table, key: string, value: string): Promise<void>;
+  hashDelete(table: Table, keys: string[]): Promise<void>;
+  /** Overwrite entries, but only those that still exist (a phone may have unsubscribed meanwhile). */
+  hashUpdateExisting(table: Table, entries: Record<string, string>): Promise<void>;
+  hashGet(table: Table, key: string): Promise<string | null>;
+  hashAll(table: Table): Promise<Record<string, string>>;
 }
 
 type DocName = "db" | "book";
 type Versioned = { version: number };
 const docKey = (doc: DocName) => `apt:${doc}`;
 const verKey = (doc: DocName) => `apt:${doc}:version`;
+type Table = "push" | "push-removed";
+/**
+ * Preview deployments share the production database, so devices are kept per
+ * environment: a test from a preview build never reaches residents' devices.
+ */
+export function pushNamespace(env: Record<string, string | undefined> = process.env): string {
+  return env.VERCEL_ENV === "production" ? "prod" : env.VERCEL_ENV || "dev";
+}
+const tableKey = (t: Table) => `apt:${t}:${pushNamespace()}`;
 
 /**
  * Find the Upstash REST credentials. Vercel's Upstash integration adds
@@ -70,6 +89,32 @@ function redisBackend(): Backend | null {
     async getReceipt(id) {
       return (await redis.get<string>(`apt:receipt:${id}`)) ?? null;
     },
+    async hashSet(table, key, value) {
+      await redis.hset(tableKey(table), { [key]: value });
+    },
+    async hashDelete(table, keys) {
+      if (keys.length) await redis.hdel(tableKey(table), ...keys);
+    },
+    async hashGet(table, key) {
+      const v = await redis.hget<unknown>(tableKey(table), key);
+      return v == null ? null : typeof v === "string" ? v : JSON.stringify(v);
+    },
+    async hashUpdateExisting(table, entries) {
+      const flat = Object.entries(entries).flat();
+      if (!flat.length) return;
+      await redis.eval(
+        `for i = 1, #ARGV, 2 do
+           if redis.call('HEXISTS', KEYS[1], ARGV[i]) == 1 then redis.call('HSET', KEYS[1], ARGV[i], ARGV[i + 1]) end
+         end
+         return 1`,
+        [tableKey(table)],
+        flat,
+      );
+    },
+    async hashAll(table) {
+      const all = (await redis.hgetall<Record<string, unknown>>(tableKey(table))) ?? {};
+      return Object.fromEntries(Object.entries(all).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]));
+    },
   };
 }
 
@@ -77,7 +122,25 @@ function fileBackend(): Backend {
   const dir = process.env.DATA_DIR || path.join(process.cwd(), "data");
   const fileOf = (doc: DocName) => path.join(dir, `${doc}.json`);
   const receipts = path.join(dir, "receipts");
+  const tableFile = (t: Table) => path.join(dir, `${t}.json`);
   let lock: Promise<unknown> = Promise.resolve();
+  const readTable = async (t: Table): Promise<Record<string, string>> => {
+    try {
+      return JSON.parse(await fs.readFile(tableFile(t), "utf8"));
+    } catch {
+      return {};
+    }
+  };
+  const editTable = (t: Table, fn: (all: Record<string, string>) => void) => {
+    const run = lock.then(async () => {
+      const all = await readTable(t);
+      fn(all);
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(tableFile(t), JSON.stringify(all, null, 1));
+    });
+    lock = run.catch(() => undefined);
+    return run;
+  };
   return {
     name: "file",
     async read<T extends Versioned>(doc: DocName) {
@@ -112,6 +175,24 @@ function fileBackend(): Backend {
       } catch {
         return null;
       }
+    },
+    hashSet: (t, key, value) =>
+      editTable(t, (all) => {
+        all[key] = value;
+      }),
+    hashDelete: (t, keys) =>
+      editTable(t, (all) => {
+        for (const k of keys) delete all[k];
+      }),
+    hashUpdateExisting: (t, entries) =>
+      editTable(t, (all) => {
+        for (const [k, v] of Object.entries(entries)) if (k in all) all[k] = v;
+      }),
+    async hashGet(t, key) {
+      return (await readTable(t))[key] ?? null;
+    },
+    async hashAll(t) {
+      return readTable(t);
     },
   };
 }
@@ -190,4 +271,47 @@ export async function saveReceipt(id: string, dataUrl: string) {
 
 export async function readReceipt(id: string) {
   return getBackend().getReceipt(id);
+}
+
+/* ---------- push notification subscriptions ---------- */
+
+/**
+ * Two tables of subscriptions keyed by a hash of their endpoint:
+ * "push" = devices that get notifications, "push-removed" = devices an admin
+ * removed (still subscribed in their browser, so they can be added back).
+ */
+export type PushTable = Table;
+
+export async function pushTableAll(table: PushTable): Promise<Record<string, string>> {
+  return getBackend().hashAll(table);
+}
+
+export async function pushTableGet(table: PushTable, key: string): Promise<string | null> {
+  return getBackend().hashGet(table, key);
+}
+
+export async function pushTableSet(table: PushTable, key: string, value: string) {
+  await getBackend().hashSet(table, key, value);
+}
+
+export async function pushTableDelete(table: PushTable, keys: string[]) {
+  await getBackend().hashDelete(table, keys);
+}
+
+export async function savePushSubscription(key: string, value: string) {
+  await pushTableSet("push", key, value);
+}
+
+/** Forget subscriptions (the phone unsubscribed, or the push service says it is gone). */
+export async function removePushSubscriptions(keys: string[]) {
+  await pushTableDelete("push", keys);
+}
+
+export async function updatePushSubscriptions(entries: Record<string, string>) {
+  if (Object.keys(entries).length) await getBackend().hashUpdateExisting("push", entries);
+}
+
+/** Every active subscription, keyed by its storage key. */
+export async function allPushSubscriptions(): Promise<Record<string, string>> {
+  return pushTableAll("push");
 }

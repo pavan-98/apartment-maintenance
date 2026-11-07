@@ -20,6 +20,23 @@ const svg = (pad) => `
   </g>
 </svg>`;
 
+// Notification badge (Android status bar / small icon): Android uses only the
+// transparency, so it is the building in solid white with windows and door cut out.
+const badge = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="96 80 320 360" width="96" height="96">
+  <mask id="m">
+    <path d="M150 420V150l106-44 106 44v270z" fill="#fff" stroke="#fff" stroke-width="22" stroke-linejoin="round"/>
+    <g fill="#000">
+      <rect x="186" y="178" width="44" height="34" rx="6"/><rect x="282" y="178" width="44" height="34" rx="6"/>
+      <rect x="186" y="236" width="44" height="34" rx="6"/><rect x="282" y="236" width="44" height="34" rx="6"/>
+      <rect x="186" y="294" width="44" height="34" rx="6"/><rect x="282" y="294" width="44" height="34" rx="6"/>
+      <path d="M226 420v-56h60v56z"/>
+    </g>
+  </mask>
+  <rect x="96" y="80" width="320" height="360" fill="#fff" mask="url(#m)"/>
+  <path d="M120 420h272" stroke="#fff" stroke-width="22" stroke-linecap="round"/>
+</svg>`;
+
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const shots = [
@@ -33,5 +50,8 @@ for (const [file, size, pad] of shots) {
   await page.setContent(`<style>html,body{margin:0;background:transparent}svg{width:${size}px;height:${size}px;display:block}</style>${svg(pad)}`);
   writeFileSync(file, await page.screenshot({ omitBackground: true, type: "png" }));
 }
+await page.setViewportSize({ width: 96, height: 96 });
+await page.setContent(`<style>html,body{margin:0;background:transparent}svg{width:96px;height:96px;display:block}</style>${badge}`);
+writeFileSync("public/badge-96.png", await page.screenshot({ omitBackground: true, type: "png" }));
 await browser.close();
 console.log("icons written");

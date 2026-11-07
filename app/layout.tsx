@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppProvider } from "@/components/AppProvider";
 import { ServiceWorker } from "@/components/ServiceWorker";
+import { Splash, SPLASH_SCRIPT } from "@/components/Splash";
 import { APARTMENT_NAME, APARTMENT_SHORT_NAME } from "@/lib/config";
 
 export const metadata: Metadata = {
@@ -23,14 +24,17 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // The splash script sets data-splash on <html> before React loads.
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: SPLASH_SCRIPT }} />
         {/* Telugu font for devices that don't ship one (most phones already do). */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;600;700;800&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-dvh antialiased">
+        <Splash />
         <AppProvider>{children}</AppProvider>
         <ServiceWorker />
       </body>

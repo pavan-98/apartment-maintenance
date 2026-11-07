@@ -10,6 +10,7 @@ import { useApp } from "./AppProvider";
 import { Sheet } from "./Sheet";
 import { WhatsAppButton } from "./dashboard";
 import { CLOSED_THIS_VISIT, SEEN_NOTICES, SEEN_RULES, useSeen } from "./seen";
+import { NotifyCard, NotifyPrompt } from "./Notify";
 
 /** Count of notices this phone hasn't seen yet (for the tab badge). */
 export function useUnseenNoticeCount(db: DB | null): number {
@@ -51,6 +52,7 @@ type PopupItem = { kind: "notice"; notice: Notice; key: string } | { kind: "rule
  * - notices set to "once": until the resident taps OK on this phone
  * - rules the admin chose to announce: once, after they are added or changed
  * Closing with ✕ hides a pop-up until the app is opened again.
+ * When they are all closed, residents are asked to turn on notifications and install the app.
  */
 export function StartupPopups({ db }: { db: DB }) {
   const { t, lang } = useApp();
@@ -78,7 +80,8 @@ export function StartupPopups({ db }: { db: DB }) {
   }, [ready, db, closed, seenNotices, seenRules]);
 
   const item = queue[0];
-  if (!item) return null;
+  if (!ready) return null;
+  if (!item) return <NotifyPrompt />;
 
   const stamp = item.kind === "notice" ? item.notice.updatedAt : item.rules.map((r) => r.updatedAt).sort().pop() ?? "";
   const close = () => closed.mark([{ id: item.key, updatedAt: stamp }]);
@@ -153,6 +156,7 @@ export function NoticesTab({ db }: { db: DB }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   return (
     <section className="space-y-3">
+      <NotifyCard />
       {list.length === 0 && <p className="card p-6 text-center text-ink-2">{t("noNotices")}</p>}
       {list.map((n) => (
         <article key={n.id} className={`card p-4 ${n.important ? "border-l-4 border-l-crit" : ""}`}>

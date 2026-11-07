@@ -9,6 +9,11 @@ export async function getSession(): Promise<{ db: DB; session: Session | null }>
   return { db, session: resolveSession(claims, db) };
 }
 
+/** How an admin is named in the edit history. */
+export function actorName(session: Session): string {
+  return session.role === "manager" ? `${session.name} (manager)` : session.name;
+}
+
 /** The slice of data each kind of visitor is allowed to receive. */
 export function viewFor(db: DB, session: Session | null): DB {
   if (!session) return publicView(db);

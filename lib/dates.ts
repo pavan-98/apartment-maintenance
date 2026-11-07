@@ -70,3 +70,9 @@ export function formatDate(iso: string | undefined, lang: "en" | "te" = "en"): s
   const months = lang === "te" ? TE_MONTHS : EN_MONTHS;
   return `${d} ${lang === "en" ? months[m - 1].slice(0, 3) : months[m - 1]} ${y}`;
 }
+
+/** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th … 21st, 22nd … */
+export function ordinal(n: number): string {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${suffix}`;
+}

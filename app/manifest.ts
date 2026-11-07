@@ -10,7 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#f1f4f9",
+    // Same blue as the opening animation, so an installed app opens without a flash.
+    background_color: "#1e3a8a",
     theme_color: "#1e3a8a",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

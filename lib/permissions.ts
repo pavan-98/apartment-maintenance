@@ -19,6 +19,7 @@ export const MANAGER_CAN = [
   "Add and edit this month's expenses and additional works",
   "Post and edit notices",
   "Send WhatsApp reminders and notices",
+  "Send notifications to residents' devices",
   "Add phone numbers and update who lives in a flat",
 ];
 

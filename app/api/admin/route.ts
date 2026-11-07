@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth";
 import { updateDB } from "@/lib/store";
-import { getSession, viewFor } from "@/lib/session";
-import { applyAction, ActionError, type Action } from "@/lib/actions";
+import { actorName, getSession, viewFor } from "@/lib/session";
+import { applyAction, ActionError, noticeTitle, type Action } from "@/lib/actions";
 import { checkPermission } from "@/lib/permissions";
+import { sendNoticePush, vapidKeys } from "@/lib/pushSend";
+import { auditPush } from "@/lib/pushAudit";
 
 export async function POST(req: Request) {
   const { session } = await getSession();
@@ -23,13 +25,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const by = session.role === "manager" ? `${session.name} (manager)` : session.name;
+  const by = actorName(session);
   try {
     const db = await updateDB((cur) => {
       const denied = checkPermission(cur, session.role, action);
       if (denied) throw new ActionError(denied);
       return applyAction(cur, action, by);
     });
+    // "Send a notification to phones" ticked when posting or editing a notice.
+    if ((action.type === "notice.add" || action.type === "notice.update") && action.notify && vapidKeys()) {
+      const n = action.type === "notice.add" ? db.notices[0] : db.notices.find((x) => x.id === action.id);
+      if (n)
+        after(async () => {
+          try {
+            const r = await sendNoticePush(n);
+            console.log("notice push", r);
+            await auditPush(session, "Notification sent", `Notice: ${noticeTitle(n)} · to ${r.sent} device${r.sent === 1 ? "" : "s"}`);
+          } catch (e) {
+            console.error("notice push", e);
+          }
+        });
+    }
     return NextResponse.json({ db: viewFor(db, session), admin: session.name, role: session.role });
   } catch (e) {
     if (e instanceof ActionError) return NextResponse.json({ error: e.message }, { status: 400 });

@@ -24,8 +24,8 @@ import { inr } from "./calc";
 export type Action =
   | { type: "flat.update"; flatId: string; owner: string; resident?: string; phone?: string; residentPhone?: string; notes?: string }
   | { type: "contacts.save"; contacts: { flatId: string; phone?: string; residentPhone?: string }[] }
-  | { type: "notice.add"; notice: NoticeInput }
-  | { type: "notice.update"; id: string; notice: NoticeInput }
+  | { type: "notice.add"; notice: NoticeInput; notify?: boolean }
+  | { type: "notice.update"; id: string; notice: NoticeInput; notify?: boolean }
   | { type: "notice.delete"; id: string }
   | { type: "payment.add"; flatId: string; month: string; amount: number; date: string; mode: PayMode; receivedBy?: string; note?: string }
   | { type: "payment.markAll"; flatIds: string[]; month: string; date: string; mode: PayMode }
@@ -193,6 +193,15 @@ function flatList(db: DB, ids: unknown): string[] {
   if (!Array.isArray(ids)) return [];
   const valid = new Set(db.flats.map((f) => f.id));
   return [...new Set(ids.filter((x): x is string => typeof x === "string" && valid.has(x)))];
+}
+
+/**
+ * Add one entry to the edit history for something that isn't a change to the
+ * records (e.g. sending a notification), keeping the history at its usual size.
+ */
+export function withAuditEntry(db: DB, by: string, action: string, detail: string, now: Date = new Date()): DB {
+  const entry = { id: uid("a"), at: now.toISOString(), by, action, detail };
+  return { ...db, audit: [entry, ...db.audit].slice(0, MAX_AUDIT) };
 }
 
 /**
