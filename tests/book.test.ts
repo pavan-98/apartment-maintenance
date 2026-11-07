@@ -84,6 +84,21 @@ describe("offline book pages", () => {
     expect(f.expenses.reduce((a, e) => a + Number(e.amount), 0)).toBe(20100);
     expect(f.previousBalance).toBe(0);
     expect(f.notes).toBe("Not paid: 102, 202");
+    expect(f.notPaid).toEqual(["102", "202"]);
+  });
+
+  it("marks flats as not paid, in page order, and records the third print", () => {
+    let book = withPage();
+    const id = book.sheets[0].id;
+    expect(book.sheets[0].notPaid).toEqual([]);
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { notPaid: ["202", "102", "102"] } }, "A", NOW);
+    expect(book.sheets[0].notPaid).toEqual(["102", "202"]);
+    expect(() => applyBookAction(book, db, { type: "sheet.save", id, sheet: { notPaid: ["999"] } }, "A", NOW)).toThrow(/not on this page/);
+    // Saving other fields keeps the marks.
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { collected: 19500 } }, "A", NOW);
+    expect(book.sheets[0].notPaid).toEqual(["102", "202"]);
+    book = applyBookAction(book, db, { type: "sheet.printed", id, part: "notPaid" }, "A", NOW);
+    expect(book.sheets[0].printedNotPaid).toBe(NOW.toISOString());
   });
 
   it("managers: current month only, and they can't delete", () => {
@@ -102,5 +117,6 @@ describe("offline book pages", () => {
     const old = normalizeBook({ sheets: [{ id: "a", month: "2026-10", rows: [] } as never] });
     expect(old.sheets[0].expenses).toEqual([]);
     expect(old.sheets[0].collected).toBeNull();
+    expect(old.sheets[0].notPaid).toEqual([]);
   });
 });

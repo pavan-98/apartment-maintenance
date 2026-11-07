@@ -13,7 +13,7 @@
 import type { DB, MonthKey, Role } from "./types";
 import { ActionError, validators } from "./actions";
 import { currentMonth } from "./dates";
-import { allSummaries } from "./calc";
+import { allSummaries, inr } from "./calc";
 import { flatName } from "./share";
 
 const { uid, text, optText, money, month: monthKey } = validators;
@@ -44,8 +44,11 @@ export interface BookSheet {
   /** Balance carried from the previous page (negative = shortage). null = leave out. */
   previousBalance: number | null;
   notes?: string;
+  /** Flats marked "not paid": printed as a red row with NOT PAID in the amount column. */
+  notPaid: string[];
   printedNames?: string;
   printedExpenses?: string;
+  printedNotPaid?: string;
   createdAt: string;
   updatedAt: string;
   updatedBy: string;
@@ -56,7 +59,7 @@ export interface BookDB {
   sheets: BookSheet[];
 }
 
-export type BookPart = "names" | "expenses";
+export type BookPart = "names" | "expenses" | "notPaid";
 
 /** What fits in the expenses box of an A4 page. */
 export const MAX_EXPENSES = 18;
@@ -76,6 +79,7 @@ export interface BookSheetInput {
   expenses?: BookLineInput[];
   previousBalance?: number | string | null;
   notes?: string;
+  notPaid?: string[];
 }
 
 export type BookAction =
@@ -99,6 +103,7 @@ export function normalizeBook(raw: Partial<BookDB> | null | undefined): BookDB {
       expenses: s.expenses ?? [],
       collected: s.collected ?? null,
       previousBalance: s.previousBalance ?? null,
+      notPaid: s.notPaid ?? [],
     })),
   };
 }
@@ -155,6 +160,13 @@ function line(l: BookLineInput, field: string): BookLine {
   };
 }
 
+function notPaidList(v: unknown, flats: string[]): string[] {
+  if (!Array.isArray(v)) throw new ActionError("Invalid not-paid list");
+  const ids = [...new Set(v.map(String))];
+  for (const id of ids) if (!flats.includes(id)) throw new ActionError(`Flat ${id} is not on this page`);
+  return flats.filter((f) => ids.includes(f)); // keep page order
+}
+
 function findSheet(book: BookDB, id: unknown): BookSheet {
   const s = book.sheets.find((x) => x.id === id);
   if (!s) throw new ActionError("Book page not found");
@@ -179,6 +191,7 @@ export function applyBookAction(book: BookDB, db: DB, action: BookAction, by: st
         income: [],
         expenses: [],
         previousBalance: prev ? bookTotals(prev).closing : null,
+        notPaid: [],
         createdAt: at,
         updatedAt: at,
         updatedBy: by,
@@ -208,6 +221,7 @@ export function applyBookAction(book: BookDB, db: DB, action: BookAction, by: st
               : money(x.previousBalance, "Previous balance", true, true)
             : cur.previousBalance,
         notes: x.notes !== undefined ? optText(x.notes, "Notes", 600) : cur.notes,
+        notPaid: x.notPaid !== undefined ? notPaidList(x.notPaid, x.rows ? x.rows.map((r) => String(r.flatId)) : cur.rows.map((r) => r.flatId)) : cur.notPaid,
         updatedAt: at,
         updatedBy: by,
       });
@@ -218,8 +232,9 @@ export function applyBookAction(book: BookDB, db: DB, action: BookAction, by: st
     }
     case "sheet.printed": {
       const cur = findSheet(book, action.id);
-      if (action.part !== "names" && action.part !== "expenses") throw new ActionError("Invalid part");
-      return replace(action.part === "names" ? { ...cur, printedNames: at } : { ...cur, printedExpenses: at });
+      const field = { names: "printedNames", expenses: "printedExpenses", notPaid: "printedNotPaid" } as const;
+      if (!(action.part in field)) throw new ActionError("Invalid part");
+      return replace({ ...cur, [field[action.part]]: at });
     }
     default:
       throw new ActionError("Unknown action");
@@ -246,7 +261,11 @@ export function checkBookPermission(book: BookDB, role: Role, action: BookAction
  * Figures from the app's records for a month, to fill in a page in one tap.
  * Additional works (e.g. pest control) come in as money received and their costs as expenses.
  */
-export function figuresFromApp(db: DB, month: MonthKey, now: Date = new Date()): Required<Pick<BookSheetInput, "collected" | "income" | "expenses" | "notes">> & { previousBalance: number | null } {
+export function figuresFromApp(
+  db: DB,
+  month: MonthKey,
+  now: Date = new Date(),
+): Required<Pick<BookSheetInput, "collected" | "income" | "expenses" | "notes" | "notPaid">> & { previousBalance: number | null } {
   const s = allSummaries(db, now).find((x) => x.month === month);
   const expenses: BookLineInput[] = db.expenses
     .filter((e) => e.month === month)
@@ -256,12 +275,15 @@ export function figuresFromApp(db: DB, month: MonthKey, now: Date = new Date()):
     if (c.collected > 0) income.push({ label: `${c.collection.title} received`, amount: c.collected, note: `${c.paidFlatIds.length} flats` });
     for (const k of c.collection.costs) expenses.push({ label: `${c.collection.title}: ${k.label}`, amount: k.amount, note: k.note });
   }
-  const unpaid = s?.flats.filter((f) => f.status !== "paid").map((f) => f.flat.id) ?? [];
+  const unpaid = s?.flats.filter((f) => f.status === "unpaid").map((f) => f.flat.id) ?? [];
+  const partial = s?.flats.filter((f) => f.status === "partial").map((f) => `${f.flat.id} (${inr(f.paid)} of ${inr(f.due)})`) ?? [];
+  const notes = [unpaid.length ? `Not paid: ${unpaid.join(", ")}` : "", partial.length ? `Part paid: ${partial.join(", ")}` : ""].filter(Boolean).join(". ");
   return {
     collected: s?.maintenanceCollected ?? 0,
     income,
     expenses,
     previousBalance: s ? s.opening : null,
-    notes: unpaid.length ? `Not paid: ${unpaid.join(", ")}` : "All flats paid",
+    notes: notes || "All flats paid",
+    notPaid: unpaid,
   };
 }

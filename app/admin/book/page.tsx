@@ -136,6 +136,7 @@ function BookPages({ db, isManager }: { db: DB; isManager: boolean }) {
                         <Chip on={!!s.printedNames}>{s.printedNames ? `Names printed ${formatDate(s.printedNames)}` : "Names not printed"}</Chip>
                         <Chip on={hasExpensePart(s)}>{hasExpensePart(s) ? "Expenses filled" : "Expenses not filled"}</Chip>
                         {s.printedExpenses && <Chip on>{`Expenses printed ${formatDate(s.printedExpenses)}`}</Chip>}
+                        {s.notPaid.length > 0 && <Chip bad>{`Not paid: ${s.notPaid.join(", ")}`}</Chip>}
                       </span>
                     </span>
                     {s.collected !== null && <span className="tnum text-sm font-bold">{inr(bookTotals(s).closing)}</span>}
@@ -153,8 +154,9 @@ function BookPages({ db, isManager }: { db: DB; isManager: boolean }) {
   );
 }
 
-function Chip({ on, children }: { on?: boolean; children: React.ReactNode }) {
-  return <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${on ? "bg-good-bg text-good-ink" : "bg-surface-2 text-muted"}`}>{children}</span>;
+function Chip({ on, bad, children }: { on?: boolean; bad?: boolean; children: React.ReactNode }) {
+  const cls = bad ? "bg-crit-bg text-crit-ink" : on ? "bg-good-bg text-good-ink" : "bg-surface-2 text-muted";
+  return <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${cls}`}>{children}</span>;
 }
 
 function HowItWorks() {
@@ -250,6 +252,7 @@ function SheetEditor({
   const [expenses, setExpenses] = useState<Line[]>(toLines(sheet.expenses));
   const [prev, setPrev] = useState(sheet.previousBalance === null ? "" : String(sheet.previousBalance));
   const [notes, setNotes] = useState(sheet.notes ?? "");
+  const [notPaid, setNotPaid] = useState<string[]>(sheet.notPaid);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const touch = <T,>(set: (v: T) => void) => (v: T) => {
@@ -271,7 +274,7 @@ function SheetEditor({
       {
         type: "sheet.save",
         id: sheet.id,
-        sheet: { pageNo, rows, collected: collected.trim() === "" ? null : collected, income: clean(income), expenses: clean(expenses), previousBalance: prev.trim() === "" ? null : prev, notes },
+        sheet: { pageNo, rows, collected: collected.trim() === "" ? null : collected, income: clean(income), expenses: clean(expenses), previousBalance: prev.trim() === "" ? null : prev, notes, notPaid },
       },
       ok,
     );
@@ -280,7 +283,7 @@ function SheetEditor({
     return done;
   };
 
-  const goPrint = async (part: "names" | "expenses" | "full") => {
+  const goPrint = async (part: "names" | "expenses" | "notPaid" | "full") => {
     if (dirty && canEdit && !(await save("Saved — opening print"))) return;
     window.location.href = `/admin/book/print?id=${sheet.id}&part=${part}`;
   };
@@ -294,6 +297,7 @@ function SheetEditor({
     setExpenses(toLines(f.expenses));
     setPrev(f.previousBalance === null ? "" : String(f.previousBalance));
     if (!notes.trim()) setNotes(f.notes ?? "");
+    setNotPaid(f.notPaid.filter((id) => rows.some((r) => r.flatId === id)));
     setDirty(true);
   };
 
@@ -404,6 +408,35 @@ function SheetEditor({
             <LinesEditor lines={income} onChange={touch(setIncome)} max={MAX_INCOME} placeholder="e.g. Pest control received" />
           </div>
 
+          <div>
+            <p className="label">Not paid</p>
+            <p className="mb-2 text-xs text-muted">
+              Tap the flats that haven’t paid. On paper their row turns red and the amount column says <strong className="text-crit-ink">NOT PAID</strong>.
+            </p>
+            <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-8">
+              {rows.map((r) => {
+                const on = notPaid.includes(r.flatId);
+                return (
+                  <button
+                    key={r.flatId}
+                    type="button"
+                    aria-pressed={on}
+                    title={r.name}
+                    onClick={() => touch(setNotPaid)(on ? notPaid.filter((x) => x !== r.flatId) : rows.map((x) => x.flatId).filter((id) => id === r.flatId || notPaid.includes(id)))}
+                    className={`tnum rounded-lg py-2 text-sm font-bold ring-1 transition ${on ? "bg-crit text-white ring-crit" : "bg-surface text-ink-2 ring-line hover:text-ink"}`}
+                  >
+                    {r.flatId}
+                  </button>
+                );
+              })}
+            </div>
+            {notPaid.length > 0 && (
+              <p className="mt-1.5 text-xs font-semibold text-crit-ink">
+                {notPaid.length} not paid: {notPaid.join(", ")}
+              </p>
+            )}
+          </div>
+
           <Field label="Note" hint="Printed in red in the box, e.g. who hasn’t paid or something to check">
             <textarea className="input min-h-[4.5rem] font-semibold text-crit-ink" value={notes} maxLength={600} onChange={(e) => touch(setNotes)(e.target.value)} placeholder="Not paid: 102, 202" />
           </Field>
@@ -432,6 +465,11 @@ function SheetEditor({
         <button className="btn flex-1" disabled={!filled} onClick={() => goPrint("expenses")} title={filled ? undefined : "Fill in the expenses first"}>
           🖨 Expenses
         </button>
+        {notPaid.length > 0 && (
+          <button className="btn flex-1 text-crit-ink" onClick={() => goPrint("notPaid")}>
+            🖨 Not paid
+          </button>
+        )}
         <button className="btn" onClick={() => goPrint("full")}>
           🖨 Full page
         </button>

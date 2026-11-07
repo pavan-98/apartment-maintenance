@@ -6,14 +6,15 @@ import { monthLabel } from "@/lib/dates";
 import { bookTotals, type BookSheet } from "@/lib/book";
 
 /**
- * One A4 book page, laid out in millimetres so that the two printing passes
- * land in exactly the same place on the paper.
+ * One A4 book page, laid out in millimetres so that every printing pass
+ * lands in exactly the same place on the paper.
  *
  *   names    → header, flat rows (sign + amount by hand), empty expenses box, footer
- *   expenses → only the contents of the expenses box
+ *   expenses → only the contents of the expenses box (optionally with the not-paid marks)
+ *   notPaid  → only the not-paid marks: a red row and NOT PAID in the amount column
  *   full     → everything (a fresh copy, or a PDF)
  */
-export type PrintPart = "names" | "expenses" | "full";
+export type PrintPart = "names" | "expenses" | "notPaid" | "full";
 
 // Page geometry (mm).
 const W = 210;
@@ -38,6 +39,8 @@ const COLS = [
 const mm = (n: number) => `${n}mm`;
 /** The note prints in red so it stands out on a colour printer (dark enough to read in black and white too). */
 const NOTE_RED = "#c40000";
+const ROW_RED = "#ffd2d2";
+const EXACT: CSSProperties = { printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" };
 
 function Box({ x, y, w, h, style, className, children }: { x: number; y: number; w: number; h?: number; style?: CSSProperties; className?: string; children?: ReactNode }) {
   return (
@@ -47,18 +50,52 @@ function Box({ x, y, w, h, style, className, children }: { x: number; y: number;
   );
 }
 
-export function BookPage({ sheet, part, apartmentName, due }: { sheet: BookSheet; part: PrintPart; apartmentName: string; due: number }) {
-  // The part that is NOT being printed stays in the layout but is invisible on paper
+export function BookPage({
+  sheet,
+  part,
+  apartmentName,
+  due,
+  marks = false,
+}: {
+  sheet: BookSheet;
+  part: PrintPart;
+  apartmentName: string;
+  due: number;
+  /** With part "expenses": also print the not-paid marks in the same pass. */
+  marks?: boolean;
+}) {
+  // The parts that are NOT being printed stay in the layout but are invisible on paper
   // (shown faintly on screen so you can see where things will land).
-  const namesCls = part === "expenses" ? "book-hide" : "";
-  const expCls = part === "names" ? "book-hide" : "";
+  const namesCls = part === "names" || part === "full" ? "" : "book-hide";
+  const expCls = part === "expenses" || part === "full" ? "" : "book-hide";
+  const marksCls = part === "notPaid" || part === "full" || (part === "expenses" && marks) ? "" : "book-hide";
   const n = Math.max(1, sheet.rows.length);
   const rowH = Math.min(9.5, ROWS_H / n);
   const totalY = TABLE_Y + HEAD_H + n * rowH;
   const nameSize = Math.min(3.9, rowH * 0.45);
 
   return (
-    <div className="book-page" style={{ position: "relative", width: mm(W), height: "296mm", background: "#fff", color: "#000", overflow: "hidden", fontFamily: "Arial, 'Noto Sans Telugu', sans-serif" }}>
+    <div className="book-page" style={{ position: "relative", width: mm(W), height: "296mm", background: "#fff", color: "#000", overflow: "hidden", fontFamily: "Arial, 'Noto Sans Telugu', sans-serif", ...EXACT }}>
+      {/* ---------- not-paid marks: drawn first so the names sit on top of the red ---------- */}
+      <div className={marksCls}>
+        {sheet.rows.map((r, i) =>
+          sheet.notPaid.includes(r.flatId) ? (
+            <div key={r.flatId}>
+              <Box x={X + 0.3} y={TABLE_Y + HEAD_H + i * rowH + 0.3} w={CW - 0.6} h={rowH - 0.6} style={{ background: ROW_RED, ...EXACT }} />
+              <Box
+                x={X + CW - COLS[4].w}
+                y={TABLE_Y + HEAD_H + i * rowH}
+                w={COLS[4].w}
+                h={rowH}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", color: NOTE_RED, fontWeight: 900, fontSize: mm(Math.min(3.8, rowH * 0.42)), letterSpacing: "0.03em", ...EXACT }}
+              >
+                NOT PAID
+              </Box>
+            </div>
+          ) : null,
+        )}
+      </div>
+
       {/* ---------- pass 1: header, rows, empty box, footer ---------- */}
       <div className={namesCls}>
         <Box x={X} y={9} w={CW} style={{ textAlign: "center" }}>
