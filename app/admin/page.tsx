@@ -16,19 +16,26 @@ import { TeamPanel } from "@/components/admin/TeamPanel";
 
 // `owner: true` = main admin only; managers don't see these tabs.
 const TABS = [
-  { k: "pay", l: "Maintenance", monthly: true },
-  { k: "exp", l: "Expenses", monthly: true },
-  { k: "works", l: "Additional works", monthly: true },
-  { k: "notices", l: "Notices" },
-  { k: "send", l: "WhatsApp send" },
-  { k: "phones", l: "Phone numbers" },
-  { k: "flats", l: "Flats" },
-  { k: "rules", l: "Rules", owner: true },
-  { k: "team", l: "Managers", owner: true },
-  { k: "settings", l: "Settings", monthly: true, owner: true },
-  { k: "log", l: "History", owner: true },
+  { k: "pay", l: "Maintenance", i: "💰", g: "month", monthly: true },
+  { k: "exp", l: "Expenses", i: "🧾", g: "month", monthly: true },
+  { k: "works", l: "Additional works", i: "🛠️", g: "month", monthly: true },
+  { k: "notices", l: "Notices", i: "📢", g: "people" },
+  { k: "send", l: "WhatsApp send", i: "💬", g: "people" },
+  { k: "phones", l: "Phone numbers", i: "📞", g: "people" },
+  { k: "flats", l: "Flats", i: "🏢", g: "people" },
+  { k: "rules", l: "Rules", i: "📜", g: "setup", owner: true },
+  { k: "team", l: "Managers", i: "👥", g: "setup", owner: true },
+  { k: "settings", l: "Settings", i: "⚙️", g: "setup", monthly: true, owner: true },
+  { k: "log", l: "History", i: "🕘", g: "setup", owner: true },
 ] as const;
 type TabKey = (typeof TABS)[number]["k"];
+
+// Sidebar groups on a laptop / desktop screen.
+const GROUPS = [
+  { g: "month", l: "Money" },
+  { g: "people", l: "Residents" },
+  { g: "setup", l: "Setup" },
+] as const;
 
 export default function AdminPage() {
   const { db, admin, role, loading, storage } = useApp();
@@ -52,7 +59,7 @@ export default function AdminPage() {
   return (
     <>
       <Header adminArea />
-      <main className="mx-auto max-w-3xl px-4 pb-24 pt-4">
+      <main className={`mx-auto max-w-3xl px-4 pb-24 pt-4 ${admin ? "lg:max-w-5xl" : ""}`}>
         {loading && !db ? (
           <p className="py-20 text-center text-ink-2">Loading…</p>
         ) : !admin ? (
@@ -77,63 +84,112 @@ export default function AdminPage() {
                 <LogoutButton />
               </div>
             </div>
-            {isManager && (
-              <p className="mb-4 rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-ink-2">
-                You are managing <strong>{monthLabel(current)}</strong>. Past months can’t be changed, but you can record late payments for
-                earlier dues from the Maintenance tab.
-              </p>
-            )}
-            {db.settings.isDemo && !isManager && (
-              <p className="mb-4 rounded-xl border border-dashed border-crit bg-crit-bg px-4 py-2.5 text-sm font-semibold text-crit-ink">
-                Sample data is loaded.{" "}
-                <button className="underline" onClick={() => setTab("settings")}>
-                  Remove it in Settings
-                </button>{" "}
-                when you are ready to start.
-              </p>
-            )}
-            <nav className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1" aria-label="Admin sections">
-              {tabs.map((t) => (
-                <button
-                  key={t.k}
-                  onClick={() => setTab(t.k)}
-                  className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold transition ${activeTab === t.k ? "bg-brand text-brand-ink" : "bg-surface text-ink-2 ring-1 ring-line hover:text-ink"}`}
-                  aria-current={activeTab === t.k ? "page" : undefined}
+            <div className="lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8">
+            <aside className="hidden lg:block">
+              <nav className="sticky top-20 space-y-5" aria-label="Admin sections">
+                {GROUPS.map((grp) => {
+                  const items = tabs.filter((t) => t.g === grp.g);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={grp.g}>
+                      <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider text-muted">{grp.l}</p>
+                      <ul className="space-y-0.5">
+                        {items.map((t) => (
+                          <li key={t.k}>
+                            <button
+                              onClick={() => setTab(t.k)}
+                              aria-current={activeTab === t.k ? "page" : undefined}
+                              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold transition ${activeTab === t.k ? "bg-brand text-brand-ink shadow-sm" : "text-ink-2 hover:bg-surface hover:text-ink"}`}
+                            >
+                              <span aria-hidden className="w-5 text-center">
+                                {t.i}
+                              </span>
+                              {t.l}
+                            </button>
+                          </li>
+                        ))}
+                        {grp.g === "month" && (
+                          <li>
+                            <Link
+                              href="/admin/book"
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold text-ink-2 transition hover:bg-surface hover:text-ink"
+                            >
+                              <span aria-hidden className="w-5 text-center">
+                                📒
+                              </span>
+                              Book pages
+                            </Link>
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </nav>
+            </aside>
+              <div className="min-w-0">
+                {isManager && (
+                  <p className="mb-4 rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-ink-2">
+                    You are managing <strong>{monthLabel(current)}</strong>. Past months can’t be changed, but you can record late payments for
+                    earlier dues from the Maintenance tab.
+                  </p>
+                )}
+                {db.settings.isDemo && !isManager && (
+                  <p className="mb-4 rounded-xl border border-dashed border-crit bg-crit-bg px-4 py-2.5 text-sm font-semibold text-crit-ink">
+                    Sample data is loaded.{" "}
+                    <button className="underline" onClick={() => setTab("settings")}>
+                      Remove it in Settings
+                    </button>{" "}
+                    when you are ready to start.
+                  </p>
+                )}
+                <nav
+                  className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden"
+                  aria-label="Admin sections"
                 >
-                  {t.l}
-                </button>
-              ))}
-              <Link
-                href="/admin/book"
-                className="shrink-0 rounded-full bg-surface px-4 py-2 text-sm font-bold text-ink-2 ring-1 ring-line transition hover:text-ink"
-              >
-                📒 Book pages
-              </Link>
-            </nav>
-            {"monthly" in tabInfo && tabInfo.monthly && months.length > 1 && (
-              <div className="mb-4">
-                <MonthPicker months={months} value={current} onChange={setMonth} />
+                  {tabs.map((t) => (
+                    <button
+                      key={t.k}
+                      onClick={() => setTab(t.k)}
+                      className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold transition ${activeTab === t.k ? "bg-brand text-brand-ink" : "bg-surface text-ink-2 ring-1 ring-line hover:text-ink"}`}
+                      aria-current={activeTab === t.k ? "page" : undefined}
+                    >
+                      {t.l}
+                    </button>
+                  ))}
+                  <Link
+                    href="/admin/book"
+                    className="shrink-0 rounded-full bg-surface px-4 py-2 text-sm font-bold text-ink-2 ring-1 ring-line transition hover:text-ink"
+                  >
+                    📒 Book pages
+                  </Link>
+                </nav>
+                {"monthly" in tabInfo && tabInfo.monthly && months.length > 1 && (
+                  <div className="mb-4">
+                    <MonthPicker months={months} value={current} onChange={setMonth} />
+                  </div>
+                )}
+                {activeTab === "pay" && <PaymentsPanel db={db} month={current} isManager={isManager} />}
+                {activeTab === "exp" && <ExpensesPanel db={db} month={current} />}
+                {activeTab === "works" && <WorksPanel db={db} month={current} />}
+                {activeTab === "notices" && (
+                  <NoticesPanel
+                    db={db}
+                    onSendToAll={(noticeId) => {
+                      setSendPreset({ kind: "notice", noticeId });
+                      setTab("send");
+                    }}
+                  />
+                )}
+                {activeTab === "send" && <SendPanel db={db} preset={sendPreset} goContacts={() => setTab("phones")} />}
+                {activeTab === "phones" && <ContactsPanel key={db.version} db={db} />}
+                {activeTab === "flats" && <FlatsPanel db={db} isManager={isManager} />}
+                {activeTab === "rules" && <RulesPanel db={db} />}
+                {activeTab === "team" && <TeamPanel db={db} />}
+                {activeTab === "settings" && <SettingsPanel key={db.version} db={db} month={current} />}
+                {activeTab === "log" && <AuditPanel db={db} />}
               </div>
-            )}
-            {activeTab === "pay" && <PaymentsPanel db={db} month={current} isManager={isManager} />}
-            {activeTab === "exp" && <ExpensesPanel db={db} month={current} />}
-            {activeTab === "works" && <WorksPanel db={db} month={current} />}
-            {activeTab === "notices" && (
-              <NoticesPanel
-                db={db}
-                onSendToAll={(noticeId) => {
-                  setSendPreset({ kind: "notice", noticeId });
-                  setTab("send");
-                }}
-              />
-            )}
-            {activeTab === "send" && <SendPanel db={db} preset={sendPreset} goContacts={() => setTab("phones")} />}
-            {activeTab === "phones" && <ContactsPanel key={db.version} db={db} />}
-            {activeTab === "flats" && <FlatsPanel db={db} isManager={isManager} />}
-            {activeTab === "rules" && <RulesPanel db={db} />}
-            {activeTab === "team" && <TeamPanel db={db} />}
-            {activeTab === "settings" && <SettingsPanel key={db.version} db={db} month={current} />}
-            {activeTab === "log" && <AuditPanel db={db} />}
+            </div>
           </AdminToasts>
         ) : (
           <p className="py-20 text-center text-ink-2">Could not load data.</p>
