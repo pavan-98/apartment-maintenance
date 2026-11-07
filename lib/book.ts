@@ -46,6 +46,8 @@ export interface BookSheet {
   notes?: string;
   /** Flats marked "not paid": printed as a red row with NOT PAID in the amount column. */
   notPaid: string[];
+  /** Flats ticked as paid on the editor (not printed; used for counts and the collected total). */
+  paid: string[];
   printedNames?: string;
   printedExpenses?: string;
   printedNotPaid?: string;
@@ -53,6 +55,8 @@ export interface BookSheet {
   syncedAt?: string;
   /** The note the last sync wrote, so a later sync only replaces it if nobody edited it. */
   syncedNote?: string;
+  /** The previous balance the last sync wrote; a balance typed by hand is never replaced. */
+  syncedPreviousBalance?: number | null;
   createdAt: string;
   updatedAt: string;
   updatedBy: string;
@@ -84,6 +88,7 @@ export interface BookSheetInput {
   previousBalance?: number | string | null;
   notes?: string;
   notPaid?: string[];
+  paid?: string[];
 }
 
 export type BookAction =
@@ -109,6 +114,7 @@ export function normalizeBook(raw: Partial<BookDB> | null | undefined): BookDB {
       collected: s.collected ?? null,
       previousBalance: s.previousBalance ?? null,
       notPaid: s.notPaid ?? [],
+      paid: s.paid ?? [],
     })),
   };
 }
@@ -156,11 +162,22 @@ function previousSheet(book: BookDB, month: MonthKey): BookSheet | undefined {
   return sortedSheets(book).find((s) => s.month < month && s.collected !== null);
 }
 
+/** Accepts amounts as typed: "1,500", "₹ 1,500", "−10,052" (with a typographic minus). */
+export function parseAmount(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  const s = v.replace(/[₹,\s]/g, "").replace(/[−–—]/g, "-");
+  return s === "" ? "" : s;
+}
+
+function amount(v: unknown, field: string, allowNegative = false): number {
+  return money(parseAmount(v), field, true, allowNegative);
+}
+
 function line(l: BookLineInput, field: string): BookLine {
   return {
     id: uid("bl"),
     label: text(l.label, `${field} item`, 120),
-    amount: money(l.amount, `${field} amount for “${String(l.label ?? "").trim()}”`, true),
+    amount: amount(l.amount, `${field} amount for “${String(l.label ?? "").trim()}”`),
     note: optText(l.note, `${field} note`, 120),
   };
 }
@@ -206,6 +223,7 @@ export function applyBookAction(book: BookDB, db: DB, action: BookAction, by: st
         expenses: [],
         previousBalance: prev ? bookTotals(prev).closing : null,
         notPaid: [],
+        paid: [],
         createdAt: at,
         updatedAt: at,
         updatedBy: by,
@@ -219,26 +237,29 @@ export function applyBookAction(book: BookDB, db: DB, action: BookAction, by: st
       if ((x.expenses?.length ?? 0) > MAX_EXPENSES) throw new ActionError(`Only ${MAX_EXPENSES} expense lines fit on the page — combine some`);
       if ((x.income?.length ?? 0) > MAX_INCOME) throw new ActionError(`Only ${MAX_INCOME} “money received” lines fit on the page`);
       const blank = (v: unknown) => v === null || v === undefined || v === "";
-      return replace({
+      const saved: BookSheet = {
         ...cur,
         pageNo: x.pageNo !== undefined ? optText(x.pageNo, "Page number", 12) : cur.pageNo,
         rows: x.rows
           ? x.rows.map((r) => ({ flatId: text(r.flatId, "Flat", 10), name: text(r.name ?? "", "Name", 80, false) }))
           : cur.rows,
-        collected: x.collected !== undefined ? (blank(x.collected) ? null : money(x.collected, "Maintenance collected", true)) : cur.collected,
+        collected: x.collected !== undefined ? (blank(parseAmount(x.collected)) ? null : amount(x.collected, "Maintenance collected")) : cur.collected,
         income: x.income ? x.income.map((l) => line(l, "Money received")) : cur.income,
         expenses: x.expenses ? x.expenses.map((l) => line(l, "Expense")) : cur.expenses,
         previousBalance:
           x.previousBalance !== undefined
-            ? blank(x.previousBalance)
+            ? blank(parseAmount(x.previousBalance))
               ? null
-              : money(x.previousBalance, "Previous balance", true, true)
+              : amount(x.previousBalance, "Previous balance", true)
             : cur.previousBalance,
         notes: x.notes !== undefined ? optText(x.notes, "Notes", 600) : cur.notes,
         notPaid: x.notPaid !== undefined ? notPaidList(x.notPaid, x.rows ? x.rows.map((r) => String(r.flatId)) : cur.rows.map((r) => r.flatId)) : cur.notPaid,
+        paid: x.paid !== undefined ? notPaidList(x.paid, x.rows ? x.rows.map((r) => String(r.flatId)) : cur.rows.map((r) => r.flatId)) : cur.paid,
         updatedAt: at,
         updatedBy: by,
-      });
+      };
+      // A flat can't be both paid and not paid: "not paid" wins.
+      return replace({ ...saved, paid: saved.paid.filter((id) => !saved.notPaid.includes(id)) });
     }
     case "sheet.sync": {
       // Copy everything from the app: names, money, expenses, previous balance and not-paid flats.
@@ -246,14 +267,20 @@ export function applyBookAction(book: BookDB, db: DB, action: BookAction, by: st
       const f = figuresFromApp(db, cur.month, now);
       const rows = rowsFromFlats(db);
       const keepNote = cur.notes && cur.notes !== cur.syncedNote;
+      // Keep a previous balance typed by hand (or carried from the last book page);
+      // only fill it from the app when it is empty or still what the last sync wrote.
+      const keepPrev = cur.previousBalance !== null && cur.previousBalance !== cur.syncedPreviousBalance;
+      const flatIds = rows.map((r) => r.flatId);
       return replace({
         ...cur,
         rows,
         collected: f.collected === null ? null : money(f.collected, "Maintenance collected", true),
         income: fitLines(f.income, MAX_INCOME, "Other money received").map((l) => line(l, "Money received")),
         expenses: fitLines(f.expenses, MAX_EXPENSES, "Other expenses").map((l) => line(l, "Expense")),
-        previousBalance: f.previousBalance,
-        notPaid: notPaidList(f.notPaid, rows.map((r) => r.flatId)),
+        previousBalance: keepPrev ? cur.previousBalance : f.previousBalance,
+        syncedPreviousBalance: keepPrev ? cur.syncedPreviousBalance : f.previousBalance,
+        notPaid: notPaidList(f.notPaid, flatIds),
+        paid: notPaidList(f.paid, flatIds),
         notes: keepNote ? cur.notes : optText(f.notes, "Notes", 600),
         syncedNote: optText(f.notes, "Notes", 600),
         syncedAt: at,
@@ -301,7 +328,7 @@ export function figuresFromApp(
   db: DB,
   month: MonthKey,
   now: Date = new Date(),
-): Required<Pick<BookSheetInput, "collected" | "income" | "expenses" | "notes" | "notPaid">> & { previousBalance: number | null } {
+): Required<Pick<BookSheetInput, "collected" | "income" | "expenses" | "notes" | "notPaid" | "paid">> & { previousBalance: number | null } {
   const s = allSummaries(db, now).find((x) => x.month === month);
   const expenses: BookLineInput[] = db.expenses
     .filter((e) => e.month === month)
@@ -321,5 +348,6 @@ export function figuresFromApp(
     previousBalance: s ? s.opening : null,
     notes: notes || "All flats paid",
     notPaid: unpaid,
+    paid: s?.flats.filter((f) => f.status === "paid").map((f) => f.flat.id) ?? [],
   };
 }

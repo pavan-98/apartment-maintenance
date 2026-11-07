@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { DB } from "@/lib/types";
-import { activeMonths, inr } from "@/lib/calc";
+import { activeMonths, inr, maintenanceDue } from "@/lib/calc";
 import { addMonths, currentMonth, formatDate, monthLabel } from "@/lib/dates";
 import {
   bookTotals,
   hasExpensePart,
   MAX_EXPENSES,
   MAX_INCOME,
+  parseAmount,
   rowsFromFlats,
   sortedSheets,
   type BookAction,
@@ -101,12 +102,13 @@ function BookPages({ db, isManager }: { db: DB; isManager: boolean }) {
         !error && <p className="py-10 text-center text-ink-2">Loading…</p>
       ) : open ? (
         <SheetEditor
-          key={`${open.id}-${open.updatedAt}`}
+          key={`${open.id}-${open.syncedAt ?? ""}`}
           db={db}
           sheet={open}
           canEdit={!isManager || open.month === cur}
           canDelete={!isManager}
           run={run}
+          act={act}
           onClose={() => select(null)}
         />
       ) : (
@@ -231,7 +233,13 @@ function formatDateTime(iso: string): string {
 type Line = { label: string; amount: string; note: string };
 const toLines = (ls: { label?: string; amount?: number | string; note?: string }[]): Line[] =>
   ls.map((l) => ({ label: l.label ?? "", amount: l.amount === undefined ? "" : String(l.amount), note: l.note ?? "" }));
-const numOr = (s: string): number | null => (s.trim() === "" ? null : Number(s));
+/** Reads an amount as typed ("1,500", "−10,052"); null when empty or not a number. */
+const numOr = (s: string): number | null => {
+  const v = parseAmount(s);
+  if (v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 function SheetEditor({
   db,
@@ -239,6 +247,7 @@ function SheetEditor({
   canEdit,
   canDelete,
   run,
+  act,
   onClose,
 }: {
   db: DB;
@@ -246,6 +255,7 @@ function SheetEditor({
   canEdit: boolean;
   canDelete: boolean;
   run: (a: BookAction, ok?: string) => Promise<boolean>;
+  act: (a: BookAction) => Promise<string | null>;
   onClose: () => void;
 }) {
   const [pageNo, setPageNo] = useState(sheet.pageNo ?? "");
@@ -256,62 +266,142 @@ function SheetEditor({
   const [prev, setPrev] = useState(sheet.previousBalance === null ? "" : String(sheet.previousBalance));
   const [notes, setNotes] = useState(sheet.notes ?? "");
   const [notPaid, setNotPaid] = useState<string[]>(sheet.notPaid);
-  const [dirty, setDirty] = useState(false);
+  const [paid, setPaid] = useState<string[]>(sheet.paid);
   const [busy, setBusy] = useState(false);
+
+  // Saving: every change is saved automatically a moment after you stop typing;
+  // Enter saves straight away. `edits` counts changes, `savedAt` the last one saved.
+  const [edits, setEdits] = useState(0);
+  const [savedEdits, setSavedEdits] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const dirty = edits !== savedEdits;
   const touch = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
-    setDirty(true);
+    setEdits((n) => n + 1);
   };
 
   const clean = (ls: Line[]): BookLineInput[] => ls.filter((l) => l.label.trim() || l.amount.trim()).map((l) => ({ label: l.label, amount: l.amount, note: l.note }));
   const preview = bookTotals({
     collected: numOr(collected),
     previousBalance: numOr(prev),
-    income: clean(income).map((l, i) => ({ id: String(i), label: l.label ?? "", amount: Number(l.amount) || 0 })),
-    expenses: clean(expenses).map((l, i) => ({ id: String(i), label: l.label ?? "", amount: Number(l.amount) || 0 })),
+    income: clean(income).map((l, i) => ({ id: String(i), label: l.label ?? "", amount: numOr(String(l.amount)) ?? 0 })),
+    expenses: clean(expenses).map((l, i) => ({ id: String(i), label: l.label ?? "", amount: numOr(String(l.amount)) ?? 0 })),
   });
 
-  const save = async (ok = "Saved") => {
-    setBusy(true);
-    const done = await run(
-      {
-        type: "sheet.save",
-        id: sheet.id,
-        sheet: { pageNo, rows, collected: collected.trim() === "" ? null : collected, income: clean(income), expenses: clean(expenses), previousBalance: prev.trim() === "" ? null : prev, notes, notPaid },
+  // The latest form contents, for saves that run after a delay.
+  const payload = useRef<{ edits: number; action: BookAction } | null>(null);
+  payload.current = {
+    edits,
+    action: {
+      type: "sheet.save",
+      id: sheet.id,
+      sheet: {
+        pageNo,
+        rows,
+        collected: collected.trim() === "" ? null : collected,
+        income: clean(income),
+        expenses: clean(expenses),
+        previousBalance: prev.trim() === "" ? null : prev,
+        notes,
+        notPaid,
+        paid,
       },
-      ok,
-    );
-    setBusy(false);
-    if (done) setDirty(false);
-    return done;
+    },
   };
+  const inFlight = useRef<Promise<boolean> | null>(null);
+
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!canEdit) return true;
+    while (inFlight.current) await inFlight.current; // one save at a time
+    const p = payload.current!;
+    const job = (async () => {
+      setSaving(true);
+      const err = await act(p.action);
+      setSaving(false);
+      setSaveError(err);
+      if (!err) setSavedEdits((s) => Math.max(s, p.edits));
+      return !err;
+    })();
+    inFlight.current = job;
+    const ok = await job;
+    inFlight.current = null;
+    return ok;
+  }, [act, canEdit]);
+
+  // Autosave 1.2 s after the last change.
+  useEffect(() => {
+    if (!dirty || !canEdit) return;
+    const t = setTimeout(() => void save(), 1200);
+    return () => clearTimeout(t);
+  }, [edits, dirty, canEdit, save]);
+
+  // Warn before closing the tab with unsaved changes.
+  useEffect(() => {
+    if (!dirty && !saving) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, saving]);
+
+  // Enter in any field saves (Ctrl/⌘+Enter in the note).
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const el = e.target as HTMLElement;
+    if (e.key !== "Enter" || !canEdit) return;
+    if (el.tagName === "INPUT" || (el.tagName === "TEXTAREA" && (e.ctrlKey || e.metaKey))) {
+      e.preventDefault();
+      void save().then((ok) => ok && toast("Saved"));
+    }
+  };
+  const { toast } = useAdmin();
 
   const goPrint = async (part: "names" | "expenses" | "notPaid" | "full") => {
-    if (dirty && canEdit && !(await save("Saved — opening print"))) return;
+    if (dirty && !(await save())) return;
     window.location.href = `/admin/book/print?id=${sheet.id}&part=${part}`;
   };
 
   const syncWithApp = async () => {
-    const msg = dirty
-      ? "Sync replaces the names, money, expenses and not-paid flats on this page with the app’s. Your unsaved changes here will be lost. Continue?"
-      : "Sync replaces the names, money, expenses and not-paid flats on this page with the app’s. Continue?";
-    if (!confirm(msg)) return;
+    if (!confirm("Sync copies this month from the app: names, money, expenses and who has paid. A previous balance or note you typed yourself is kept. Continue?")) return;
+    if (dirty && !(await save())) return;
     setBusy(true);
     await run({ type: "sheet.sync", id: sheet.id }, "Synced with the app");
     setBusy(false);
   };
 
+  const setStatus = (flatId: string, status: "paid" | "notPaid") => {
+    const order = rows.map((r) => r.flatId);
+    const isOn = status === "paid" ? paid.includes(flatId) : notPaid.includes(flatId);
+    const nextPaid = paid.filter((x) => x !== flatId);
+    const nextNot = notPaid.filter((x) => x !== flatId);
+    if (!isOn) (status === "paid" ? nextPaid : nextNot).push(flatId);
+    const sort = (ids: string[]) => order.filter((id) => ids.includes(id));
+    setPaid(sort(nextPaid));
+    setNotPaid(sort(nextNot));
+    setEdits((n) => n + 1);
+  };
+
+  const due = maintenanceDue(db, sheet.month);
+  const paidTotal = paid.length * due;
   const templates = db.settings.expenseTemplates.filter((t) => !expenses.some((e) => e.label.trim() === t.label));
   const filled = collected.trim() !== "" || clean(expenses).length > 0 || clean(income).length > 0 || notes.trim() !== "";
+  const unmarked = rows.length - paid.length - notPaid.length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onKeyDown={onKeyDown}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button className="btn btn-sm" onClick={() => (!dirty || confirm("Leave without saving?")) && onClose()}>
+        <button
+          className="btn btn-sm"
+          onClick={async () => {
+            if (dirty && !(await save()) && !confirm("Couldn’t save your changes. Leave anyway?")) return;
+            onClose();
+          }}
+        >
           ← All pages
         </button>
         <p className="text-xs text-muted">
-          Last saved {formatDate(sheet.updatedAt)} by {sheet.updatedBy}
+          Last saved {formatDateTime(sheet.updatedAt)} by {sheet.updatedBy}
         </p>
       </div>
       {!canEdit && (
@@ -323,12 +413,12 @@ function SheetEditor({
           <div className="min-w-0 flex-1">
             <p className="font-bold">Sync with the app</p>
             <p className="text-sm text-ink-2">
-              Copies this month from the app: names, maintenance collected, expenses, additional works, previous balance and who hasn’t paid. Sync as often
-              as you like.
+              Copies this month from the app: names, who has paid, maintenance collected, expenses and additional works. A previous balance or note you
+              typed yourself is kept.
               {sheet.syncedAt && <span className="block text-xs text-muted">Last synced {formatDateTime(sheet.syncedAt)}</span>}
             </p>
           </div>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={syncWithApp}>
+          <button type="button" className="btn btn-primary" disabled={busy || saving} onClick={syncWithApp}>
             ⟳ Sync with app
           </button>
         </section>
@@ -336,10 +426,13 @@ function SheetEditor({
 
       {/* step 1 */}
       <section className="card p-4">
-        <SectionTitle action={<button className="btn btn-primary" onClick={() => goPrint("names")}>🖨 Print names</button>}>
+        <SectionTitle action={<button type="button" className="btn btn-primary" onClick={() => goPrint("names")}>🖨 Print names</button>}>
           1 · Names to sign · {monthLabel(sheet.month)}
         </SectionTitle>
-        <p className="mb-3 text-sm text-ink-2">Print on a blank A4 sheet. Residents sign and write the amount and date by hand.</p>
+        <p className="mb-3 text-sm text-ink-2">
+          Print on a blank A4 sheet. Residents sign and write the amount and date by hand. Mark each flat <strong className="text-good-ink">Paid</strong> or{" "}
+          <strong className="text-crit-ink">Not paid</strong> as you collect. Not paid prints a red outline and NOT PAID on the sheet.
+        </p>
         <fieldset disabled={!canEdit} className="space-y-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-28">
@@ -351,42 +444,79 @@ function SheetEditor({
               type="button"
               className="btn btn-sm"
               onClick={() => {
-                touch(setRows)(rowsFromFlats(db));
+                const fresh = rowsFromFlats(db);
+                const ids = fresh.map((r) => r.flatId);
+                setPaid((p) => p.filter((id) => ids.includes(id)));
+                setNotPaid((p) => p.filter((id) => ids.includes(id)));
+                touch(setRows)(fresh);
+                toast("Names updated from the app");
               }}
             >
-              ↻ Names from Flats list
+              ↻ Sync names from app
             </button>
           </div>
           <div className="divide-y divide-line rounded-xl ring-1 ring-line">
-            {rows.map((r, i) => (
-              <label key={r.flatId} className="flex items-center gap-2 px-3 py-1.5">
-                <span className="tnum w-10 shrink-0 font-bold">{r.flatId}</span>
-                <input
-                  className="input py-1.5"
-                  value={r.name}
-                  maxLength={80}
-                  onChange={(e) => touch(setRows)(rows.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-                  aria-label={`Name for flat ${r.flatId}`}
-                />
-              </label>
-            ))}
+            {rows.map((r, i) => {
+              const isPaid = paid.includes(r.flatId);
+              const isNot = notPaid.includes(r.flatId);
+              return (
+                <div key={r.flatId} className={`flex items-center gap-2 px-2 py-1.5 sm:px-3 ${isNot ? "bg-crit-bg" : isPaid ? "bg-good-bg" : ""}`}>
+                  <span className="tnum w-9 shrink-0 font-bold">{r.flatId}</span>
+                  <input
+                    className="input min-w-0 flex-1 py-1.5"
+                    value={r.name}
+                    maxLength={80}
+                    onChange={(e) => touch(setRows)(rows.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+                    aria-label={`Name for flat ${r.flatId}`}
+                  />
+                  <div className="flex shrink-0 overflow-hidden rounded-lg ring-1 ring-line" role="group" aria-label={`Flat ${r.flatId} payment`}>
+                    <button
+                      type="button"
+                      aria-pressed={isPaid}
+                      onClick={() => setStatus(r.flatId, "paid")}
+                      className={`px-2 py-1.5 text-xs font-bold sm:px-3 sm:text-sm ${isPaid ? "bg-good text-white" : "bg-surface text-ink-2 hover:text-ink"}`}
+                    >
+                      ✓<span className="hidden sm:inline"> Paid</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={isNot}
+                      onClick={() => setStatus(r.flatId, "notPaid")}
+                      className={`border-l border-line px-2 py-1.5 text-xs font-bold sm:px-3 sm:text-sm ${isNot ? "bg-crit text-white" : "bg-surface text-ink-2 hover:text-ink"}`}
+                    >
+                      ✗<span className="hidden sm:inline"> Not paid</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <p className="text-xs text-muted">Names here are only for the printed page; the Flats list isn’t changed.</p>
+          <p className="text-sm">
+            <strong className="text-good-ink">{paid.length} paid</strong> · <strong className="text-crit-ink">{notPaid.length} not paid</strong>
+            {notPaid.length > 0 && <span className="text-crit-ink"> ({notPaid.join(", ")})</span>}
+            {unmarked > 0 && <span className="text-muted"> · {unmarked} not marked</span>}
+          </p>
+          <p className="text-xs text-muted">Names and marks here are only for the printed page. The app’s Flats list and payments aren’t changed.</p>
         </fieldset>
       </section>
 
       {/* step 2 */}
       <section className="card p-4">
-        <SectionTitle>
-          2 · After collection: expenses & balance
-        </SectionTitle>
+        <SectionTitle>2 · After collection: expenses & balance</SectionTitle>
         <p className="mb-3 text-sm text-ink-2">This prints in the box at the bottom of the same sheet. Leave it empty until collection is done.</p>
         <fieldset disabled={!canEdit} className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Maintenance collected (₹)" hint="Total of the amounts written on the sheet">
-              <input className="input tnum" inputMode="decimal" value={collected} onChange={(e) => touch(setCollected)(e.target.value)} placeholder="e.g. 19500" />
-            </Field>
-            <Field label="Previous balance (₹)" hint="From the last page. Use minus for a shortage, e.g. -9452. Leave empty to skip.">
+            <div>
+              <Field label="Maintenance collected (₹)" hint="Total of the amounts written on the sheet">
+                <input className="input tnum" inputMode="decimal" value={collected} onChange={(e) => touch(setCollected)(e.target.value)} placeholder="e.g. 19500" />
+              </Field>
+              {paid.length > 0 && numOr(collected) !== paidTotal && (
+                <button type="button" className="mt-1.5 text-xs font-semibold text-brand underline" onClick={() => touch(setCollected)(String(paidTotal))}>
+                  Use {paid.length} paid × {inr(due)} = {inr(paidTotal)}
+                </button>
+              )}
+            </div>
+            <Field label="Previous balance (₹)" hint="From the last page. Use minus for a shortage, e.g. -9452. Kept when you sync. Leave empty to skip.">
               <input className="input tnum" inputMode="text" value={prev} onChange={(e) => touch(setPrev)(e.target.value)} placeholder="e.g. -9452" />
             </Field>
           </div>
@@ -416,35 +546,6 @@ function SheetEditor({
             <LinesEditor lines={income} onChange={touch(setIncome)} max={MAX_INCOME} placeholder="e.g. Pest control received" />
           </div>
 
-          <div>
-            <p className="label">Not paid</p>
-            <p className="mb-2 text-xs text-muted">
-              Tap the flats that haven’t paid. On paper their row gets a red outline and the amount column says <strong className="text-crit-ink">NOT PAID</strong>.
-            </p>
-            <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-8">
-              {rows.map((r) => {
-                const on = notPaid.includes(r.flatId);
-                return (
-                  <button
-                    key={r.flatId}
-                    type="button"
-                    aria-pressed={on}
-                    title={r.name}
-                    onClick={() => touch(setNotPaid)(on ? notPaid.filter((x) => x !== r.flatId) : rows.map((x) => x.flatId).filter((id) => id === r.flatId || notPaid.includes(id)))}
-                    className={`tnum rounded-lg py-2 text-sm font-bold ring-1 transition ${on ? "bg-crit text-white ring-crit" : "bg-surface text-ink-2 ring-line hover:text-ink"}`}
-                  >
-                    {r.flatId}
-                  </button>
-                );
-              })}
-            </div>
-            {notPaid.length > 0 && (
-              <p className="mt-1.5 text-xs font-semibold text-crit-ink">
-                {notPaid.length} not paid: {notPaid.join(", ")}
-              </p>
-            )}
-          </div>
-
           <Field label="Note" hint="Printed in red in the box, e.g. who hasn’t paid or something to check">
             <textarea className="input min-h-[4.5rem] font-semibold text-crit-ink" value={notes} maxLength={600} onChange={(e) => touch(setNotes)(e.target.value)} placeholder="Not paid: 102, 202" />
           </Field>
@@ -456,7 +557,7 @@ function SheetEditor({
             <Row l="This month" v={inr(preview.net)} strong />
             {prev.trim() !== "" && (
               <>
-                <Row l="Previous balance" v={inr(Number(prev) || 0)} />
+                <Row l="Previous balance" v={inr(numOr(prev) ?? 0)} />
                 <Row l={preview.closing < 0 ? "Closing (shortage)" : "Closing balance"} v={inr(preview.closing)} strong crit={preview.closing < 0} />
               </>
             )}
@@ -464,27 +565,43 @@ function SheetEditor({
         </fieldset>
       </section>
 
-      <div className="sticky bottom-3 z-10 flex flex-wrap gap-2 rounded-2xl bg-surface/95 p-2 shadow-lg ring-1 ring-line backdrop-blur">
+      <div className="sticky bottom-3 z-10 rounded-2xl bg-surface/95 p-2 shadow-lg ring-1 ring-line backdrop-blur">
         {canEdit && (
-          <button className="btn btn-primary flex-1" disabled={busy || !dirty} onClick={() => save()}>
-            {busy ? "Saving…" : dirty ? "Save" : "Saved ✓"}
-          </button>
+          <p className={`px-1 pb-1.5 text-xs font-semibold ${saveError ? "text-crit-ink" : "text-muted"}`} aria-live="polite">
+            {saveError ? (
+              <>
+                ⚠ Not saved: {saveError}{" "}
+                <button type="button" className="underline" onClick={() => void save()}>
+                  Try again
+                </button>
+              </>
+            ) : saving ? (
+              "Saving…"
+            ) : dirty ? (
+              "Unsaved changes — saving in a moment (or press Enter)"
+            ) : (
+              "✓ All changes saved"
+            )}
+          </p>
         )}
-        <button className="btn flex-1" disabled={!filled} onClick={() => goPrint("expenses")} title={filled ? undefined : "Fill in the expenses first"}>
-          🖨 Expenses
-        </button>
-        {notPaid.length > 0 && (
-          <button className="btn flex-1 text-crit-ink" onClick={() => goPrint("notPaid")}>
-            🖨 Not paid
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn flex-1 whitespace-nowrap px-2" disabled={!filled} onClick={() => goPrint("expenses")} title={filled ? undefined : "Fill in the expenses first"}>
+            🖨 Expenses
           </button>
-        )}
-        <button className="btn" onClick={() => goPrint("full")}>
-          🖨 Full page
-        </button>
+          {notPaid.length > 0 && (
+            <button type="button" className="btn flex-1 whitespace-nowrap px-2 text-crit-ink" onClick={() => goPrint("notPaid")}>
+              🖨 Not paid
+            </button>
+          )}
+          <button type="button" className="btn flex-1 whitespace-nowrap px-2" onClick={() => goPrint("full")}>
+            🖨 Full page
+          </button>
+        </div>
       </div>
 
       {canDelete && (
         <button
+          type="button"
           className="text-sm font-semibold text-crit-ink underline"
           onClick={async () => {
             if (!confirm(`Delete the book page for ${monthLabel(sheet.month)}? This can’t be undone.`)) return;

@@ -116,6 +116,53 @@ describe("offline book pages", () => {
     expect(s.syncedAt).toBe(NOW.toISOString());
   });
 
+  it("sync keeps a previous balance typed by hand (it used to reset it to the app's ₹0)", () => {
+    let book = withPage();
+    const id = book.sheets[0].id;
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "A", NOW);
+    expect(book.sheets[0].previousBalance).toBe(0); // empty → filled from the app
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { previousBalance: "−10,052" } }, "A", NOW);
+    expect(book.sheets[0].previousBalance).toBe(-10052);
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "A", NOW);
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "A", NOW);
+    expect(book.sheets[0].previousBalance).toBe(-10052);
+    expect(bookTotals(book.sheets[0]).closing).toBe(-10052 - 600);
+    // Cleared by hand → the next sync fills it from the app again.
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { previousBalance: "" } }, "A", NOW);
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "A", NOW);
+    expect(book.sheets[0].previousBalance).toBe(0);
+  });
+
+  it("sync keeps the balance carried from the last book page", () => {
+    let book = withPage("2026-10");
+    const oct = book.sheets[0].id;
+    book = applyBookAction(book, db, { type: "sheet.save", id: oct, sheet: { collected: 19500, previousBalance: -9452, expenses: [{ label: "All", amount: 18100 }] } }, "A", NOW);
+    book = applyBookAction(book, db, { type: "sheet.create", month: "2026-11" }, "A", NOW);
+    const nov = book.sheets.find((s) => s.month === "2026-11")!.id;
+    book = applyBookAction(book, db, { type: "sheet.sync", id: nov }, "A", NOW);
+    expect(book.sheets.find((s) => s.id === nov)!.previousBalance).toBe(-8052);
+  });
+
+  it("accepts amounts as people type them", () => {
+    let book = withPage();
+    const id = book.sheets[0].id;
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { collected: "₹ 19,500", expenses: [{ label: "Salary", amount: "7,000" }] } }, "A", NOW);
+    expect(book.sheets[0].collected).toBe(19500);
+    expect(book.sheets[0].expenses[0].amount).toBe(7000);
+    expect(() => applyBookAction(book, db, { type: "sheet.save", id, sheet: { expenses: [{ label: "Salary", amount: "-5" }] } }, "A", NOW)).toThrow(/negative/);
+  });
+
+  it("marks flats paid or not paid, never both", () => {
+    let book = withPage();
+    const id = book.sheets[0].id;
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { paid: ["103", "101", "102"], notPaid: ["102"] } }, "A", NOW);
+    expect(book.sheets[0].paid).toEqual(["101", "103"]);
+    expect(book.sheets[0].notPaid).toEqual(["102"]);
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "A", NOW);
+    expect(book.sheets[0].paid).toHaveLength(13);
+    expect(book.sheets[0].notPaid).toEqual(["102", "202"]);
+  });
+
   it("sync keeps a note you wrote yourself, but refreshes its own", () => {
     let book = withPage();
     const id = book.sheets[0].id;
@@ -157,5 +204,6 @@ describe("offline book pages", () => {
     expect(old.sheets[0].expenses).toEqual([]);
     expect(old.sheets[0].collected).toBeNull();
     expect(old.sheets[0].notPaid).toEqual([]);
+    expect(old.sheets[0].paid).toEqual([]);
   });
 });
