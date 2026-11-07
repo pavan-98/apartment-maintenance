@@ -100,7 +100,7 @@ export function PushPanel({ db }: { db: DB }) {
         const unreachable = j.failed - j.removed;
         const parts = [`${what} sent to ${plural(j.sent, "device")}`];
         if (j.removed) parts.push(`${j.removed} had turned notifications off (removed)`);
-        if (unreachable) parts.push(`${unreachable} could not be reached`);
+        if (unreachable) parts.push(`${unreachable} could not be reached${j.errors?.[0] ? ` (${j.errors[0]})` : ""}`);
         toast(parts.join(" · "), j.sent === 0);
       }
     } catch {

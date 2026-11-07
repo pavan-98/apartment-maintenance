@@ -120,6 +120,8 @@ export interface SendResult {
   sent: number;
   failed: number;
   removed: number;
+  /** Why sends failed (other than expired subscriptions), e.g. "403 …". */
+  errors?: string[];
 }
 
 /**
@@ -159,9 +161,13 @@ export async function sendPush(
       result.failed++;
       const code = (r.reason as { statusCode?: number })?.statusCode;
       // 404/410: the person turned notifications off or the subscription expired.
-      if (code === 404 || code === 410) gone.push(id);
-      else {
-        console.error("push failed", code, (r.reason as { body?: string })?.body || (r.reason as Error)?.message);
+      if (code === 404 || code === 410) {
+        gone.push(id);
+        console.log("push subscription expired, removed", code, s.device);
+      } else {
+        const why = `${code ?? "network"} ${(r.reason as { body?: string })?.body || (r.reason as Error)?.message || ""}`.trim();
+        console.error("push failed", why);
+        (result.errors ??= []).push(why.slice(0, 200));
         updates[id] = JSON.stringify({ ...s, last: { at, ok: false, status: code } });
       }
     });

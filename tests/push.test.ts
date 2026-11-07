@@ -126,7 +126,7 @@ describe("sending", () => {
     const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const r = await sendNoticePush(notice);
     errors.mockRestore();
-    expect(r).toEqual({ sent: 1, failed: 2, removed: 1 });
+    expect(r).toEqual({ sent: 1, failed: 2, removed: 1, errors: ["500 Server error"] });
     expect(JSON.parse(calls[0].payload).title).toBe("📢 ఆదివారం నీటి సరఫరా ఉండదు");
     const left = Object.values(await store.allPushSubscriptions()).map((x) => JSON.parse(x));
     expect(left.map((x) => x.endpoint).sort()).toEqual(["https://fcm.googleapis.com/fcm/send/down", "https://fcm.googleapis.com/fcm/send/ok"]);
@@ -218,6 +218,35 @@ describe("sending", () => {
     await store.removePushSubscriptions(["a"]);
     await store.updatePushSubscriptions({ a: "2" });
     expect(await store.allPushSubscriptions()).toEqual({});
+  });
+
+  it("test route says why a test failed, so the app can repair it", async () => {
+    vi.doMock("web-push", () => ({
+      default: {
+        sendNotification: async (s: { endpoint: string }) => {
+          if (s.endpoint.endsWith("/expired")) throw Object.assign(new Error("Gone"), { statusCode: 410 });
+          if (s.endpoint.endsWith("/badkey")) throw Object.assign(new Error("x"), { statusCode: 403, body: "VAPID credentials mismatch" });
+          return { statusCode: 201 };
+        },
+      },
+    }));
+    const { saveSubscription, removeDevice } = await import("@/lib/pushSend");
+    const { POST } = await import("@/app/api/push/test/route");
+    const call = async (e: string) => {
+      const res = await POST(new Request("http://x/api/push/test", { method: "POST", body: JSON.stringify({ endpoint: `https://fcm.googleapis.com/fcm/send/${e}` }) }));
+      return { status: res.status, ...(await res.json()) };
+    };
+    const logs = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const errs = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(await call("unknown")).toMatchObject({ status: 404, reason: "not-subscribed" });
+    for (const e of ["ok", "expired", "badkey", "paused"]) await saveSubscription(parseSubscription(sub(`https://fcm.googleapis.com/fcm/send/${e}`))!);
+    await removeDevice(subKey("https://fcm.googleapis.com/fcm/send/paused"));
+    expect(await call("ok")).toMatchObject({ status: 200, sent: 1 });
+    expect(await call("expired")).toMatchObject({ status: 410, reason: "gone" });
+    expect(await call("badkey")).toMatchObject({ status: 502, reason: "error", error: "403 VAPID credentials mismatch" });
+    expect(await call("paused")).toMatchObject({ status: 409, removed: true });
+    logs.mockRestore();
+    errs.mockRestore();
   });
 
   it("does nothing without VAPID keys", async () => {

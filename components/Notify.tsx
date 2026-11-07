@@ -147,6 +147,7 @@ export function NotifyCard() {
   const [error, setError] = useState(false);
   const [help, setHelp] = useState(false);
   const [tested, setTested] = useState<"sent" | "failed" | "removed" | null>(null);
+  const [testError, setTestError] = useState("");
 
   const s = push.status;
   if (s === "loading" || s === "unsupported" || s === "disabled") return null;
@@ -188,7 +189,9 @@ export function NotifyCard() {
                   await push.sendTest();
                   setTested("sent");
                 } catch (e) {
-                  setTested((e as Error).message === "removed" ? "removed" : "failed");
+                  const msg = (e as Error).message;
+                  setTested(msg === "removed" ? "removed" : "failed");
+                  setTestError(msg === "removed" ? "" : msg);
                 }
                 setBusy(false);
               }}
@@ -208,7 +211,12 @@ export function NotifyCard() {
       </div>
       {error && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyFailed")}</p>}
       {tested === "sent" && s === "on" && <p className="mt-2 text-sm text-ink-2">{t("notifyTestSent")}</p>}
-      {tested === "failed" && s === "on" && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyTestFailed")}</p>}
+      {tested === "failed" && s === "on" && (
+        <p className="mt-2 text-sm font-semibold text-crit-ink">
+          {t("notifyTestFailed")}
+          {testError && <span className="mt-0.5 block text-xs font-normal text-muted">({testError})</span>}
+        </p>
+      )}
       {tested === "removed" && s === "on" && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyTestRemoved")}</p>}
       <Sheet open={help} onClose={() => setHelp(false)} closeLabel={t("close")} title={t("notifyIosTitle")}>
         <IosSteps />
