@@ -1,5 +1,5 @@
 // Offline support: network first, falling back to the last cached copy.
-const CACHE = "apt-v4";
+const CACHE = "apt-v5";
 const SHELL = ["/", "/manifest.webmanifest", "/icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -69,7 +69,7 @@ self.addEventListener("push", (e) => {
     self.registration.showNotification(data.title || "New notice", {
       body: data.body || "",
       icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      badge: "/badge-96.png", // white shape on transparent: Android shows only its outline
       tag: data.tag || "notice",
       renotify: true,
       data: { url: data.url || "/#notices" },
