@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { demoDB } from "@/lib/seed";
-import { applyBookAction, bookTotals, checkBookPermission, emptyBook, figuresFromApp, hasExpensePart, normalizeBook, type BookDB } from "@/lib/book";
+import { applyBookAction, BookConflict, bookTotals, checkBookPermission, emptyBook, figuresFromApp, hasExpensePart, normalizeBook, type BookDB } from "@/lib/book";
+import { inr, sumMoney } from "@/lib/calc";
 
 const NOW = new Date("2026-11-02T06:00:00Z");
 const db = demoDB(NOW);
@@ -199,11 +200,69 @@ describe("offline book pages", () => {
   });
 
   it("reads an empty or old stored document safely", () => {
-    expect(normalizeBook(null)).toEqual({ version: 0, sheets: [] });
+    expect(normalizeBook(null)).toEqual({ version: 0, sheets: [], log: [] });
     const old = normalizeBook({ sheets: [{ id: "a", month: "2026-10", rows: [] } as never] });
     expect(old.sheets[0].expenses).toEqual([]);
     expect(old.sheets[0].collected).toBeNull();
     expect(old.sheets[0].notPaid).toEqual([]);
     expect(old.sheets[0].paid).toEqual([]);
+  });
+
+  it("refuses a save made from an out-of-date copy of the page", () => {
+    let book = withPage();
+    const s0 = book.sheets[0];
+    // Phone saves first…
+    const later = new Date(NOW.getTime() + 60_000);
+    book = applyBookAction(book, db, { type: "sheet.save", id: s0.id, base: s0.updatedAt, sheet: { previousBalance: "-10052" } }, "Pavan", later);
+    // …then a laptop tab that was opened before tries to save its old copy.
+    expect(() =>
+      applyBookAction(book, db, { type: "sheet.save", id: s0.id, base: s0.updatedAt, sheet: { previousBalance: "" } }, "Pavan", later),
+    ).toThrow(BookConflict);
+    expect(book.sheets[0].previousBalance).toBe(-10052);
+    // With the current version it saves.
+    const ok = applyBookAction(book, db, { type: "sheet.save", id: s0.id, base: book.sheets[0].updatedAt, sheet: { collected: 1500 } }, "Pavan", later);
+    expect(ok.sheets[0].collected).toBe(1500);
+  });
+
+  it("logs who changed which money figure, folding quick autosaves into one entry", () => {
+    let book = withPage();
+    const id = book.sheets[0].id;
+    expect(book.log[0]).toMatchObject({ what: "made", by: "Admin" });
+    const t = (min: number) => new Date(NOW.getTime() + min * 60_000);
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { previousBalance: "-100" } }, "Pavan", t(1));
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { previousBalance: "-10052" } }, "Pavan", t(2));
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { pageNo: "61" } }, "Pavan", t(3)); // not money: no entry
+    expect(book.log).toHaveLength(2);
+    expect(book.log[0].what).toBe("edited");
+    expect(book.log[0].changes.find((c) => c.field === "Previous balance")).toEqual({ field: "Previous balance", from: "empty", to: "−₹10,052" });
+    // A different person, or much later, starts a new entry.
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { collected: 1500 } }, "Ravi (manager)", t(4));
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { collected: 3000 } }, "Pavan", t(60));
+    expect(book.log.map((l) => l.by)).toEqual(["Pavan", "Ravi (manager)", "Pavan", "Admin"]);
+    book = applyBookAction(book, db, { type: "sheet.sync", id }, "Pavan", t(61));
+    expect(book.log[0].what).toBe("synced with app");
+    book = applyBookAction(book, db, { type: "sheet.delete", id }, "Pavan", t(62));
+    expect(book.log[0]).toMatchObject({ what: "deleted", month: "2026-10" });
+  });
+
+  it("adds paise exactly and shows them when present", () => {
+    expect(0.1 + 0.2).not.toBe(0.3);
+    expect(sumMoney([0.1, 0.2])).toBe(0.3);
+    expect(inr(5492.5)).toBe("₹5,492.50");
+    expect(inr(19500)).toBe("₹19,500");
+    expect(inr(-10052)).toBe("−₹10,052");
+    expect(inr(-0.004)).toBe("₹0");
+    let book = withPage();
+    const id = book.sheets[0].id;
+    book = applyBookAction(book, db, { type: "sheet.save", id, sheet: { collected: "0.3", expenses: [{ label: "a", amount: "0.1" }, { label: "b", amount: "0.2" }] } }, "A", NOW);
+    expect(bookTotals(book.sheets[0]).net).toBe(0);
+  });
+
+  it("rejects malformed requests cleanly", () => {
+    const book = withPage();
+    const id = book.sheets[0].id;
+    expect(() => applyBookAction(book, db, { type: "sheet.save", id, sheet: { expenses: "lots" } } as never, "A", NOW)).toThrow(/Invalid request/);
+    expect(() => applyBookAction(book, db, { type: "sheet.save", id, sheet: { notPaid: "102" } } as never, "A", NOW)).toThrow(/Invalid request/);
+    expect(() => applyBookAction(book, db, { type: "sheet.save", id: "nope", sheet: {} }, "A", NOW)).toThrow(/not found/);
   });
 });

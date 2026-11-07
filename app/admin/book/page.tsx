@@ -14,6 +14,8 @@ import {
   rowsFromFlats,
   sortedSheets,
   type BookAction,
+  type BookDB,
+  type BookLogEntry,
   type BookLineInput,
   type BookSheet,
 } from "@/lib/book";
@@ -50,7 +52,8 @@ export default function BookAdminPage() {
 }
 
 function BookPages({ db, isManager }: { db: DB; isManager: boolean }) {
-  const { book, error, act } = useBook(true);
+  const { book, error, act, send, reload } = useBook(true);
+  const [nonce, setNonce] = useState(0); // bumps to reopen the editor with fresh data
   const { toast } = useAdmin();
   const [openId, setOpenId] = useState<string | null>(null);
   useEffect(() => setOpenId(new URLSearchParams(window.location.search).get("id")), []);
@@ -102,13 +105,22 @@ function BookPages({ db, isManager }: { db: DB; isManager: boolean }) {
         !error && <p className="py-10 text-center text-ink-2">Loading…</p>
       ) : open ? (
         <SheetEditor
-          key={`${open.id}-${open.syncedAt ?? ""}`}
+          key={`${open.id}-${open.syncedAt ?? ""}-${nonce}`}
           db={db}
           sheet={open}
           canEdit={!isManager || open.month === cur}
           canDelete={!isManager}
           run={run}
-          act={act}
+          send={send}
+          carry={(() => {
+            const p = sheets.find((s) => s.month < open.month && s.collected !== null);
+            return p ? { label: `${monthLabel(p.month)}${p.pageNo ? ` (page ${p.pageNo})` : ""}`, closing: bookTotals(p).closing } : null;
+          })()}
+          log={book.log.filter((l) => l.sheetId === open.id)}
+          onReload={async () => {
+            await reload();
+            setNonce((n) => n + 1);
+          }}
           onClose={() => select(null)}
         />
       ) : (
@@ -247,7 +259,10 @@ function SheetEditor({
   canEdit,
   canDelete,
   run,
-  act,
+  send,
+  carry,
+  log,
+  onReload,
   onClose,
 }: {
   db: DB;
@@ -255,7 +270,11 @@ function SheetEditor({
   canEdit: boolean;
   canDelete: boolean;
   run: (a: BookAction, ok?: string) => Promise<boolean>;
-  act: (a: BookAction) => Promise<string | null>;
+  send: (a: BookAction) => Promise<{ error: string | null; conflict?: boolean; book?: BookDB }>;
+  /** The previous book page's closing balance, to check the carried balance against. */
+  carry: { label: string; closing: number } | null;
+  log: BookLogEntry[];
+  onReload: () => Promise<void>;
   onClose: () => void;
 }) {
   const [pageNo, setPageNo] = useState(sheet.pageNo ?? "");
@@ -275,6 +294,9 @@ function SheetEditor({
   const [savedEdits, setSavedEdits] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
+  // The version of the page these edits are based on; the server refuses a save if it has moved on.
+  const base = useRef(sheet.updatedAt);
   const dirty = edits !== savedEdits;
   const touch = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
@@ -311,30 +333,49 @@ function SheetEditor({
   };
   const inFlight = useRef<Promise<boolean> | null>(null);
 
+  const conflictRef = useRef(false);
   const save = useCallback(async (): Promise<boolean> => {
-    if (!canEdit) return true;
+    if (!canEdit || conflictRef.current) return !conflictRef.current;
     while (inFlight.current) await inFlight.current; // one save at a time
     const p = payload.current!;
     const job = (async () => {
       setSaving(true);
-      const err = await act(p.action);
+      const res = await send({ ...(p.action as Extract<BookAction, { type: "sheet.save" }>), base: base.current });
       setSaving(false);
-      setSaveError(err);
-      if (!err) setSavedEdits((s) => Math.max(s, p.edits));
-      return !err;
+      setSaveError(res.error);
+      if (res.conflict) {
+        conflictRef.current = true;
+        setConflict(true);
+      }
+      const fresh = res.book?.sheets.find((x) => x.id === sheet.id);
+      if (fresh) base.current = fresh.updatedAt;
+      if (!res.error) setSavedEdits((s) => Math.max(s, p.edits));
+      return !res.error;
     })();
     inFlight.current = job;
     const ok = await job;
     inFlight.current = null;
     return ok;
-  }, [act, canEdit]);
+  }, [send, canEdit, sheet.id]);
 
   // Autosave 1.2 s after the last change.
   useEffect(() => {
-    if (!dirty || !canEdit) return;
+    if (!dirty || !canEdit || conflict) return;
     const t = setTimeout(() => void save(), 1200);
     return () => clearTimeout(t);
-  }, [edits, dirty, canEdit, save]);
+  }, [edits, dirty, canEdit, conflict, save]);
+
+  // Leaving the page (any link) right after typing: send the last changes anyway.
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+  useEffect(
+    () => () => {
+      if (dirtyRef.current && canEdit && !conflictRef.current && payload.current) {
+        void send({ ...(payload.current.action as Extract<BookAction, { type: "sheet.save" }>), base: base.current });
+      }
+    },
+    [send, canEdit],
+  );
 
   // Warn before closing the tab with unsaved changes.
   useEffect(() => {
@@ -363,7 +404,12 @@ function SheetEditor({
   };
 
   const syncWithApp = async () => {
-    if (!confirm("Sync copies this month from the app: names, money, expenses and who has paid. A previous balance or note you typed yourself is kept. Continue?")) return;
+    if (
+      !confirm(
+        "Sync with app REPLACES on this page: names, paid / not paid marks, maintenance collected, expenses and other money received — with the app’s figures for this month.\n\nIt KEEPS: the previous balance and a note you typed yourself.\n\nContinue?",
+      )
+    )
+      return;
     if (dirty && !(await save())) return;
     setBusy(true);
     await run({ type: "sheet.sync", id: sheet.id }, "Synced with the app");
@@ -519,6 +565,15 @@ function SheetEditor({
             <Field label="Previous balance (₹)" hint="From the last page. Use minus for a shortage, e.g. -9452. Kept when you sync. Leave empty to skip.">
               <input className="input tnum" inputMode="text" value={prev} onChange={(e) => touch(setPrev)(e.target.value)} placeholder="e.g. -9452" />
             </Field>
+            {carry && numOr(prev) !== carry.closing && (
+              <p className="rounded-lg bg-warn-bg px-3 py-2 text-xs text-warn-ink sm:col-span-2">
+                {carry.label} closes at <strong>{inr(carry.closing)}</strong>
+                {prev.trim() === "" ? ", but no previous balance is filled in here." : `, but this page carries ${inr(numOr(prev) ?? 0)}.`}{" "}
+                <button type="button" className="font-bold underline" onClick={() => touch(setPrev)(String(carry.closing))}>
+                  Use {inr(carry.closing)}
+                </button>
+              </p>
+            )}
           </div>
 
           <div>
@@ -568,7 +623,14 @@ function SheetEditor({
       <div className="sticky bottom-3 z-10 rounded-2xl bg-surface/95 p-2 shadow-lg ring-1 ring-line backdrop-blur">
         {canEdit && (
           <p className={`px-1 pb-1.5 text-xs font-semibold ${saveError ? "text-crit-ink" : "text-muted"}`} aria-live="polite">
-            {saveError ? (
+            {conflict ? (
+              <>
+                ⚠ {saveError}{" "}
+                <button type="button" className="font-bold underline" onClick={() => void onReload()}>
+                  Reload page
+                </button>
+              </>
+            ) : saveError ? (
               <>
                 ⚠ Not saved: {saveError}{" "}
                 <button type="button" className="underline" onClick={() => void save()}>
@@ -598,6 +660,30 @@ function SheetEditor({
           </button>
         </div>
       </div>
+
+      <details className="card p-4">
+        <summary className="cursor-pointer font-bold">Change history for this page ({log.length})</summary>
+        {log.length === 0 ? (
+          <p className="mt-2 text-sm text-ink-2">No money changes yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-3 text-sm">
+            {log.map((l, i) => (
+              <li key={i} className="border-t border-line pt-2">
+                <p className="font-semibold">
+                  {formatDateTime(l.at)} · {l.by} · {l.what}
+                </p>
+                <ul className="mt-1 space-y-0.5 text-ink-2">
+                  {l.changes.map((c, j) => (
+                    <li key={j}>
+                      <span className="font-semibold text-ink">{c.field}:</span> {c.from} → <strong className="text-ink">{c.to}</strong>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
 
       {canDelete && (
         <button
@@ -640,6 +726,9 @@ function LinesEditor({ lines, onChange, max, placeholder }: { lines: Line[]; onC
             <input className="input tnum w-28 shrink-0" inputMode="decimal" value={l.amount} onChange={(e) => set(i, { amount: e.target.value })} placeholder="₹ amount" aria-label="Amount" />
             <input className="input min-w-0 flex-1 text-sm" value={l.note} maxLength={120} onChange={(e) => set(i, { note: e.target.value })} placeholder="Note (optional)" aria-label="Note" />
           </div>
+          {l.label.trim() && !l.amount.trim() && <p className="mt-1 text-xs font-semibold text-crit-ink">No amount entered — this will print as ₹0.</p>}
+          {!l.label.trim() && l.amount.trim() && <p className="mt-1 text-xs font-semibold text-crit-ink">Add what this amount is for — it can’t be saved without a name.</p>}
+          {l.amount.trim() && numOr(l.amount) === null && <p className="mt-1 text-xs font-semibold text-crit-ink">“{l.amount}” isn’t a number.</p>}
         </div>
       ))}
       {lines.length < max ? (

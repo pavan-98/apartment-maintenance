@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { loadBook, updateBook } from "@/lib/store";
 import { getSession } from "@/lib/session";
 import { ActionError } from "@/lib/actions";
-import { applyBookAction, checkBookPermission, type BookAction } from "@/lib/book";
+import { applyBookAction, BookConflict, checkBookPermission, type BookAction } from "@/lib/book";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +36,7 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ book }, { headers: NO_STORE });
   } catch (e) {
+    if (e instanceof BookConflict) return NextResponse.json({ error: e.message, conflict: true }, { status: 409 });
     if (e instanceof ActionError) return NextResponse.json({ error: e.message }, { status: 400 });
     console.error(e);
     return NextResponse.json({ error: "Could not save. Please try again." }, { status: 500 });

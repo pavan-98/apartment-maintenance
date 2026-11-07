@@ -245,7 +245,16 @@ export function flatHistory(db: DB, flat: Flat, now: Date = new Date()) {
     }));
 }
 
+/** Indian rupees, e.g. ₹19,500 or −₹10,052. Paise are shown only when there are any (₹5,492.50). */
 export function inr(n: number): string {
-  const sign = n < 0 ? "−" : "";
-  return `${sign}₹${Math.abs(Math.round(n)).toLocaleString("en-IN")}`;
+  const paise = Math.round(n * 100);
+  const sign = paise < 0 ? "−" : "";
+  const abs = Math.abs(paise) / 100;
+  const whole = Number.isInteger(abs);
+  return `${sign}₹${abs.toLocaleString("en-IN", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Adds money without floating-point drift (to the paisa). */
+export function sumMoney(values: number[]): number {
+  return values.reduce((a, v) => a + Math.round(v * 100), 0) / 100;
 }

@@ -24,22 +24,26 @@ export function useBook(enabled: boolean) {
     if (enabled) load();
   }, [enabled, load]);
 
-  /** Returns an error message, or null when saved. */
-  const act = useCallback(async (action: BookAction): Promise<string | null> => {
+  /** Runs a change. `conflict` is true when someone else changed the page after it was opened. */
+  const send = useCallback(async (action: BookAction): Promise<{ error: string | null; conflict?: boolean; book?: BookDB }> => {
     try {
       const res = await fetch("/api/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
+        keepalive: true, // lets a last save finish even if the page is being closed
       });
       const json = await res.json();
-      if (!res.ok) return json.error || "Could not save";
+      if (!res.ok) return { error: json.error || "Could not save", conflict: !!json.conflict };
       setBook(json.book);
-      return null;
+      return { error: null, book: json.book };
     } catch {
-      return "No internet connection — not saved";
+      return { error: "No internet connection — not saved" };
     }
   }, []);
 
-  return { book, error, act, reload: load };
+  /** Returns an error message, or null when saved. */
+  const act = useCallback(async (action: BookAction) => (await send(action)).error, [send]);
+
+  return { book, error, act, send, reload: load };
 }

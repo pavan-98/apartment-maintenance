@@ -13,7 +13,7 @@
 import type { DB, MonthKey, Role } from "./types";
 import { ActionError, validators } from "./actions";
 import { currentMonth } from "./dates";
-import { allSummaries, inr } from "./calc";
+import { allSummaries, inr, sumMoney } from "./calc";
 import { flatName } from "./share";
 
 const { uid, text, optText, money, month: monthKey } = validators;
@@ -65,7 +65,21 @@ export interface BookSheet {
 export interface BookDB {
   version: number;
   sheets: BookSheet[];
+  /** Who changed which money figures, newest first. */
+  log: BookLogEntry[];
 }
+
+export interface BookLogEntry {
+  at: string;
+  by: string;
+  sheetId: string;
+  month: MonthKey;
+  what: "made" | "edited" | "synced with app" | "deleted";
+  changes: { field: string; from: string; to: string }[];
+}
+
+/** Thrown when a page was changed elsewhere since it was opened. */
+export class BookConflict extends ActionError {}
 
 export type BookPart = "names" | "expenses" | "notPaid";
 
@@ -93,19 +107,21 @@ export interface BookSheetInput {
 
 export type BookAction =
   | { type: "sheet.create"; month: MonthKey; pageNo?: string }
-  | { type: "sheet.save"; id: string; sheet: BookSheetInput }
+  /** `base` = the page's `updatedAt` when it was loaded; the save is refused if it has changed since. */
+  | { type: "sheet.save"; id: string; sheet: BookSheetInput; base?: string }
   | { type: "sheet.sync"; id: string }
   | { type: "sheet.delete"; id: string }
   | { type: "sheet.printed"; id: string; part: BookPart };
 
 export function emptyBook(): BookDB {
-  return { version: 0, sheets: [] };
+  return { version: 0, sheets: [], log: [] };
 }
 
 export function normalizeBook(raw: Partial<BookDB> | null | undefined): BookDB {
   const sheets = Array.isArray(raw?.sheets) ? raw.sheets : [];
   return {
     version: raw?.version ?? 0,
+    log: Array.isArray(raw?.log) ? raw.log : [],
     sheets: sheets.map((s) => ({
       ...s,
       rows: s.rows ?? [],
@@ -132,11 +148,11 @@ export interface BookTotals {
 
 export function bookTotals(s: Pick<BookSheet, "collected" | "income" | "expenses" | "previousBalance">): BookTotals {
   const collected = s.collected ?? 0;
-  const otherIncome = s.income.reduce((a, l) => a + l.amount, 0);
-  const spent = s.expenses.reduce((a, l) => a + l.amount, 0);
-  const income = collected + otherIncome;
-  const net = income - spent;
-  return { collected, otherIncome, income, spent, net, closing: (s.previousBalance ?? 0) + net };
+  const otherIncome = sumMoney(s.income.map((l) => l.amount));
+  const spent = sumMoney(s.expenses.map((l) => l.amount));
+  const income = sumMoney([collected, otherIncome]);
+  const net = sumMoney([income, -spent]);
+  return { collected, otherIncome, income, spent, net, closing: sumMoney([s.previousBalance ?? 0, net]) };
 }
 
 /** True once there is something to print in the lower (expenses) half. */
@@ -194,7 +210,7 @@ function fitLines(lines: BookLineInput[], max: number, label: string): BookLineI
   lines = lines.map((l) => ({ ...l, label: String(l.label ?? "").slice(0, 120), note: l.note?.slice(0, 120) }));
   if (lines.length <= max) return lines;
   const rest = lines.slice(max - 1);
-  const amount = rest.reduce((a, l) => a + Number(l.amount ?? 0), 0);
+  const amount = sumMoney(rest.map((l) => Number(l.amount ?? 0)));
   return [...lines.slice(0, max - 1), { label: `${label} (${rest.length} items)`, amount, note: rest.map((l) => l.label).join(", ").slice(0, 120) }];
 }
 
@@ -204,7 +220,67 @@ function findSheet(book: BookDB, id: unknown): BookSheet {
   return s;
 }
 
+/** Applies a change to the book pages and records any change to money figures in the log. */
 export function applyBookAction(book: BookDB, db: DB, action: BookAction, by: string, now: Date = new Date()): BookDB {
+  const next = applyChange(book, db, action, by, now);
+  if (action.type === "sheet.printed") return next;
+  const id = action.type === "sheet.create" ? next.sheets.find((s) => !book.sheets.some((b) => b.id === s.id))?.id : action.id;
+  const before = book.sheets.find((s) => s.id === id);
+  const after = next.sheets.find((s) => s.id === id);
+  const sheet = after ?? before;
+  if (!sheet) return next;
+  const what: BookLogEntry["what"] =
+    action.type === "sheet.create" ? "made" : action.type === "sheet.delete" ? "deleted" : action.type === "sheet.sync" ? "synced with app" : "edited";
+  const changes = diffMoney(before, after);
+  if (what === "edited" && changes.length === 0) return next; // names, page number etc.
+  const entry: BookLogEntry = { at: now.toISOString(), by, sheetId: sheet.id, month: sheet.month, what, changes };
+  // Autosave sends many small saves: fold edits by the same person within 15 minutes into one entry.
+  const last = next.log[0];
+  if (
+    what === "edited" &&
+    last &&
+    last.what === "edited" &&
+    last.sheetId === entry.sheetId &&
+    last.by === by &&
+    now.getTime() - new Date(last.at).getTime() < 15 * 60 * 1000
+  ) {
+    const merged = new Map(last.changes.map((c) => [c.field, { ...c }]));
+    for (const c of changes) {
+      const m = merged.get(c.field);
+      if (m) m.to = c.to;
+      else merged.set(c.field, { ...c });
+    }
+    const folded = [...merged.values()].filter((c) => c.from !== c.to);
+    const rest = next.log.slice(1);
+    return { ...next, log: folded.length ? [{ ...last, at: entry.at, changes: folded }, ...rest] : rest };
+  }
+  return { ...next, log: [entry, ...next.log].slice(0, 500) };
+}
+
+/** The money figures on a page, as text, for the change log. */
+function moneyFigures(s: BookSheet | undefined): Record<string, string> {
+  if (!s) return {};
+  const t = bookTotals(s);
+  const lines = (ls: BookLine[]) => ls.map((l) => `${l.label} ${inr(l.amount)}`).join("; ") || "none";
+  return {
+    "Maintenance collected": s.collected === null ? "empty" : inr(s.collected),
+    "Previous balance": s.previousBalance === null ? "empty" : inr(s.previousBalance),
+    Expenses: `${inr(t.spent)} (${lines(s.expenses)})`,
+    "Other money received": `${inr(t.otherIncome)} (${lines(s.income)})`,
+    "Closing balance": inr(t.closing),
+    "Not paid": s.notPaid.join(", ") || "none",
+  };
+}
+
+function diffMoney(a: BookSheet | undefined, b: BookSheet | undefined) {
+  const x = moneyFigures(a);
+  const y = moneyFigures(b);
+  return Object.keys({ ...x, ...y })
+    .filter((k) => x[k] !== y[k])
+    .map((k) => ({ field: k, from: x[k] ?? "—", to: y[k] ?? "—" }));
+}
+
+function applyChange(book: BookDB, db: DB, action: BookAction, by: string, now: Date): BookDB {
   const at = now.toISOString();
   const replace = (s: BookSheet) => ({ ...book, sheets: book.sheets.map((x) => (x.id === s.id ? s : x)) });
 
@@ -232,7 +308,14 @@ export function applyBookAction(book: BookDB, db: DB, action: BookAction, by: st
     }
     case "sheet.save": {
       const cur = findSheet(book, action.id);
-      const x = action.sheet ?? {};
+      if (action.base !== undefined && action.base !== cur.updatedAt) {
+        const when = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(cur.updatedAt));
+        throw new BookConflict(`This page was changed by ${cur.updatedBy} at ${when}, after you opened it. Reload to see the latest — your last change was not saved.`);
+      }
+      const x = (action.sheet && typeof action.sheet === "object" ? action.sheet : {}) as BookSheetInput;
+      for (const k of ["rows", "income", "expenses", "notPaid", "paid"] as const) {
+        if (x[k] !== undefined && !Array.isArray(x[k])) throw new ActionError("Invalid request");
+      }
       if (x.rows && x.rows.length > 60) throw new ActionError("Too many rows");
       if ((x.expenses?.length ?? 0) > MAX_EXPENSES) throw new ActionError(`Only ${MAX_EXPENSES} expense lines fit on the page — combine some`);
       if ((x.income?.length ?? 0) > MAX_INCOME) throw new ActionError(`Only ${MAX_INCOME} “money received” lines fit on the page`);
