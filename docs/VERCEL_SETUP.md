@@ -86,9 +86,9 @@ What residents see: after the notice pop-ups, the app asks them to **turn on not
 - **Android and computers** (Chrome, Edge, Firefox, Samsung Internet): works straight from the browser; installing is optional.
 - **iPhone / iPad** (iOS 16.4 or later): only after **Share → Add to Home Screen** and opening the app from the Home Screen. The app shows these steps.
 
-When you post a notice, **Send a notification to N subscribed phones** is ticked. Any current notice also has a **🔔 Notify phones** button to send it again.
+When you post a notice, **Send a notification to N subscribed devices** is ticked. Any current notice also has a **🔔 Notify devices** button to send it again.
 
-**Admin → 🔔 Phone notifications** sends your own message (not tied to a notice) in English and Telugu, with ready-made texts for a maintenance reminder, water supply and meetings. It also lists every subscribed phone (device, language, browser or installed app) with the result of the last notification, a **Send test** button and **Remove**. Residents can also tap **Send a test** in the Notices tab on their own phone.
+**Admin → 🔔 Notifications** sends your own message (not tied to a notice) in English and Telugu, with ready-made texts for a maintenance reminder, water supply and meetings. It also lists every subscribed device (device type, language, browser or installed app) with the result of the last notification, a **Send test** button and **Remove**. **Remove** moves a device to an expandable **Removed devices** list (it is sent nothing, and shows when it was last seen) with **↩ Add back**; a device that turns them on again replaces its old entry, so each one is listed once. Residents can also tap **Send a test** in the Notices tab on their own device.
 
 ## Step 6 — Trial run, then start fresh
 

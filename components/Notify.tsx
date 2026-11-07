@@ -146,7 +146,7 @@ export function NotifyCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const [help, setHelp] = useState(false);
-  const [tested, setTested] = useState<"sent" | "failed" | null>(null);
+  const [tested, setTested] = useState<"sent" | "failed" | "removed" | null>(null);
 
   const s = push.status;
   if (s === "loading" || s === "unsupported" || s === "disabled") return null;
@@ -187,8 +187,8 @@ export function NotifyCard() {
                 try {
                   await push.sendTest();
                   setTested("sent");
-                } catch {
-                  setTested("failed");
+                } catch (e) {
+                  setTested((e as Error).message === "removed" ? "removed" : "failed");
                 }
                 setBusy(false);
               }}
@@ -209,6 +209,7 @@ export function NotifyCard() {
       {error && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyFailed")}</p>}
       {tested === "sent" && s === "on" && <p className="mt-2 text-sm text-ink-2">{t("notifyTestSent")}</p>}
       {tested === "failed" && s === "on" && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyTestFailed")}</p>}
+      {tested === "removed" && s === "on" && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyTestRemoved")}</p>}
       <Sheet open={help} onClose={() => setHelp(false)} closeLabel={t("close")} title={t("notifyIosTitle")}>
         <IosSteps />
       </Sheet>

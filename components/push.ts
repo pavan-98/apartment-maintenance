@@ -42,18 +42,37 @@ function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-async function save(sub: PushSubscription, lang: Lang): Promise<boolean> {
+const DEVICE_KEY = "apt-device-id";
+
+/** A random id kept by this browser, so the server can replace this device's old subscription. */
+function deviceId(): string | undefined {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      id = crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Send the subscription to the server. */
+async function save(sub: PushSubscription, lang: Lang, auto = false): Promise<"ok" | "failed"> {
   try {
     const res = await fetch("/api/push", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscription: sub.toJSON(), lang, installed: isStandalone() }),
+      body: JSON.stringify({ subscription: sub.toJSON(), lang, installed: isStandalone(), auto, deviceId: deviceId() }),
     });
-    return res.ok;
+    return res.ok ? "ok" : "failed";
   } catch {
-    return false;
+    return "failed";
   }
 }
+
+
 
 const SYNCED = "apt-push-synced";
 
@@ -66,7 +85,8 @@ async function sync(lang: Lang) {
   }
   const reg = await navigator.serviceWorker.getRegistration("/");
   const sub = await reg?.pushManager.getSubscription();
-  if (sub && (await save(sub, lang))) {
+  if (!sub) return;
+  if ((await save(sub, lang, true)) === "ok") {
     try {
       sessionStorage.setItem(SYNCED, lang);
     } catch {
@@ -105,7 +125,7 @@ async function turnOn(lang: Lang): Promise<PushStatus> {
     if (!publicKey) return status;
     const reg = await registration();
     const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) }));
-    if (!(await save(sub, lang))) throw new Error("save failed");
+    if ((await save(sub, lang)) !== "ok") throw new Error("save failed");
     try {
       sessionStorage.setItem(SYNCED, lang);
     } catch {
@@ -143,7 +163,8 @@ async function sendTest() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint: sub.endpoint }),
   });
-  const j = (await res.json().catch(() => ({}))) as { sent?: number };
+  const j = (await res.json().catch(() => ({}))) as { sent?: number; removed?: boolean };
+  if (j.removed) throw new Error("removed");
   if (!res.ok || !j.sent) throw new Error("not sent");
 }
 

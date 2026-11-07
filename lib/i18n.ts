@@ -94,12 +94,12 @@ const en = {
   alwaysShown: "Always shown",
   rulesCount: "{n} rules",
   notifyTitle: "Get notified about new notices",
-  notifyIntro: "Get a notification on this phone when a new notice is posted: water cuts, lift work, meetings. Nothing else.",
+  notifyIntro: "Get a notification on this device when a new notice is posted: water cuts, lift work, meetings. Nothing else.",
   notifyTurnOn: "Turn on notifications",
   notifyTurnOff: "Turn off",
-  notifyOnNow: "Notifications are on for this phone ✓",
+  notifyOnNow: "Notifications are on for this device ✓",
   notifyCardOff: "Get a notification when a new notice is posted",
-  notifyCardOn: "Notifications are on for this phone",
+  notifyCardOn: "Notifications are on for this device",
   notifyBlocked: "Notifications are blocked for this site. To allow them, tap the 🔒 next to the web address → Permissions (or Site settings) → Notifications → Allow.",
   notifyFailed: "Could not turn on notifications. Please check your internet and try again.",
   notifyIosTitle: "Add the app to your Home Screen",
@@ -113,8 +113,9 @@ const en = {
   notNow: "Not now",
   pleaseWait: "Please wait…",
   notifyTest: "Send a test",
-  notifyTestSent: "Test sent. It should appear in a few seconds. If it doesn't, check this phone's settings: Settings → Apps → your browser → Notifications must be allowed (also for “Sites”), and Do Not Disturb / battery saver may delay it.",
+  notifyTestSent: "Test sent. It should appear in a few seconds. If it doesn't, check this device's settings: Settings → Apps → your browser → Notifications must be allowed (also for “Sites”), and Do Not Disturb / battery saver may delay it.",
   notifyTestFailed: "The test could not be sent. Turn notifications off and on again, then try once more.",
+  notifyTestRemoved: "An admin has paused notifications for this device. Ask them to add it back, or turn notifications off and on again.",
 } as const;
 
 export type Key = keyof typeof en;
@@ -213,12 +214,12 @@ const te: Record<Key, string> = {
   alwaysShown: "ఎల్లప్పుడూ",
   rulesCount: "{n} నియమాలు",
   notifyTitle: "కొత్త నోటీసుల గురించి నోటిఫికేషన్ పొందండి",
-  notifyIntro: "కొత్త నోటీసు పెట్టినప్పుడు ఈ ఫోన్‌కు నోటిఫికేషన్ వస్తుంది: నీటి సరఫరా ఆపడం, లిఫ్ట్ పనులు, మీటింగ్‌లు. ఇంకేమీ రావు.",
+  notifyIntro: "కొత్త నోటీసు పెట్టినప్పుడు ఈ పరికరానికి నోటిఫికేషన్ వస్తుంది: నీటి సరఫరా ఆపడం, లిఫ్ట్ పనులు, మీటింగ్‌లు. ఇంకేమీ రావు.",
   notifyTurnOn: "నోటిఫికేషన్లు ఆన్ చేయండి",
   notifyTurnOff: "ఆఫ్ చేయండి",
-  notifyOnNow: "ఈ ఫోన్‌కు నోటిఫికేషన్లు ఆన్ అయ్యాయి ✓",
+  notifyOnNow: "ఈ పరికరానికి నోటిఫికేషన్లు ఆన్ అయ్యాయి ✓",
   notifyCardOff: "కొత్త నోటీసు పెట్టినప్పుడు నోటిఫికేషన్ పొందండి",
-  notifyCardOn: "ఈ ఫోన్‌కు నోటిఫికేషన్లు ఆన్‌లో ఉన్నాయి",
+  notifyCardOn: "ఈ పరికరానికి నోటిఫికేషన్లు ఆన్‌లో ఉన్నాయి",
   notifyBlocked: "ఈ సైట్‌కు నోటిఫికేషన్లు బ్లాక్ చేశారు. అనుమతించడానికి వెబ్ అడ్రస్ పక్కన 🔒 నొక్కి → Permissions (లేదా Site settings) → Notifications → Allow ఎంచుకోండి.",
   notifyFailed: "నోటిఫికేషన్లు ఆన్ కాలేదు. ఇంటర్నెట్ చూసి మళ్ళీ ప్రయత్నించండి.",
   notifyIosTitle: "యాప్‌ను హోమ్ స్క్రీన్‌కు జోడించండి",
@@ -232,8 +233,9 @@ const te: Record<Key, string> = {
   notNow: "ఇప్పుడు కాదు",
   pleaseWait: "దయచేసి ఆగండి…",
   notifyTest: "పరీక్షించండి",
-  notifyTestSent: "పరీక్ష నోటిఫికేషన్ పంపాము. కొన్ని సెకన్లలో రావాలి. రాకపోతే ఫోన్ Settings → Apps → మీ బ్రౌజర్ → Notifications అనుమతించారో (“Sites” కూడా) చూడండి. Do Not Disturb / బ్యాటరీ సేవర్ ఆలస్యం చేయవచ్చు.",
+  notifyTestSent: "పరీక్ష నోటిఫికేషన్ పంపాము. కొన్ని సెకన్లలో రావాలి. రాకపోతే పరికరం Settings → Apps → మీ బ్రౌజర్ → Notifications అనుమతించారో (“Sites” కూడా) చూడండి. Do Not Disturb / బ్యాటరీ సేవర్ ఆలస్యం చేయవచ్చు.",
   notifyTestFailed: "పరీక్ష పంపలేకపోయాము. నోటిఫికేషన్లు ఆఫ్ చేసి మళ్ళీ ఆన్ చేసి ప్రయత్నించండి.",
+  notifyTestRemoved: "ఈ పరికరానికి నోటిఫికేషన్లను అడ్మిన్ ఆపారు. మళ్ళీ జోడించమని అడగండి, లేదా నోటిఫికేషన్లు ఆఫ్ చేసి మళ్ళీ ఆన్ చేయండి.",
 };
 
 export const dict: Record<Lang, Record<Key, string>> = { en, te };

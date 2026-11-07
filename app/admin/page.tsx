@@ -21,7 +21,7 @@ const TABS = [
   { k: "exp", l: "Expenses", i: "🧾", g: "month", monthly: true },
   { k: "works", l: "Additional works", i: "🛠️", g: "month", monthly: true },
   { k: "notices", l: "Notices", i: "📢", g: "people" },
-  { k: "push", l: "Phone notifications", i: "🔔", g: "people" },
+  { k: "push", l: "Notifications", i: "🔔", g: "people" },
   { k: "send", l: "WhatsApp send", i: "💬", g: "people" },
   { k: "phones", l: "Phone numbers", i: "📞", g: "people" },
   { k: "flats", l: "Flats", i: "🏢", g: "people" },

@@ -29,7 +29,7 @@ function origin() {
 
 type PushInfo = { enabled: boolean; subscribers?: number };
 
-/** Whether push notifications are set up on the server, and how many phones are subscribed. */
+/** Whether push notifications are set up on the server, and how many devices are subscribed. */
 function usePushInfo() {
   const [info, setInfo] = useState<PushInfo | null>(null);
   const refresh = () =>
@@ -60,7 +60,7 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
   const today = todayISO();
 
   const notifyPhones = async (n: Notice) => {
-    if (!confirm(`Send a notification about “${noticeTitle(n)}” to ${subs} subscribed phone${subs === 1 ? "" : "s"}?`)) return;
+    if (!confirm(`Send a notification about “${noticeTitle(n)}” to ${subs} subscribed device${subs === 1 ? "" : "s"}?`)) return;
     setSending(n.id);
     try {
       const res = await fetch("/api/push/send", {
@@ -73,7 +73,7 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
       else {
         const unreachable = j.failed - j.removed;
         toast(
-          `Notification sent to ${j.sent} phone${j.sent === 1 ? "" : "s"}` +
+          `Notification sent to ${j.sent} device${j.sent === 1 ? "" : "s"}` +
             (j.removed ? ` · ${j.removed} had turned notifications off (removed)` : "") +
             (unreachable ? ` · ${unreachable} could not be reached` : ""),
         );
@@ -130,7 +130,7 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
               </button>
               {pushOn && subs > 0 && (
                 <button className="btn btn-sm" onClick={() => notifyPhones(n)} disabled={sending === n.id}>
-                  🔔 {sending === n.id ? "Sending…" : "Notify phones"}
+                  🔔 {sending === n.id ? "Sending…" : "Notify devices"}
                 </button>
               )}
             </>
@@ -153,10 +153,10 @@ export function NoticesPanel({ db, onSendToAll }: { db: DB; onSendToAll: (notice
         </p>
         <p className="mt-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">
           {!push.info
-            ? "🔔 Checking phone notifications…"
+            ? "🔔 Checking notifications…"
             : pushOn
-              ? `🔔 ${subs} phone${subs === 1 ? "" : "s"} subscribed to notifications. See each phone, send tests or your own message in 🔔 Phone notifications.`
-              : "🔕 Phone notifications are not set up: add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Vercel (see docs/VERCEL_SETUP.md)."}
+              ? `🔔 ${subs} device${subs === 1 ? "" : "s"} subscribed to notifications. See each device, send tests or your own message in 🔔 Notifications.`
+              : "🔕 Notifications are not set up: add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Vercel (see docs/VERCEL_SETUP.md)."}
         </p>
       </div>
       {current.length === 0 && <p className="card p-6 text-center text-ink-2">No notices showing right now.</p>}
@@ -191,7 +191,7 @@ function NoticeSheet({ notice, subscribers, onClose }: { notice: Notice | null; 
     popupMode: (notice?.popupMode ?? "once") as PopupMode,
     expiresOn: notice?.expiresOn ?? "",
     keep: notice ? !notice.expiresOn : false,
-    // New notices notify phones by default; edits only if ticked.
+    // New notices notify devices by default; edits only if ticked.
     notify: !notice,
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -201,7 +201,7 @@ function NoticeSheet({ notice, subscribers, onClose }: { notice: Notice | null; 
     const { keep, notify: tick, ...rest } = f;
     const payload = { ...rest, expiresOn: keep && f.popupMode !== "every" ? undefined : f.expiresOn || undefined };
     const notify = tick && !!subscribers;
-    const sent = notify ? ` · notifying ${subscribers} phone${subscribers === 1 ? "" : "s"}` : "";
+    const sent = notify ? ` · notifying ${subscribers} device${subscribers === 1 ? "" : "s"}` : "";
     const ok = notice
       ? await run({ type: "notice.update", id: notice.id, notice: payload, notify }, `Notice saved — residents will see it again${sent}`)
       : await run({ type: "notice.add", notice: payload, notify }, `Notice posted${sent}`);
@@ -282,7 +282,7 @@ function NoticeSheet({ notice, subscribers, onClose }: { notice: Notice | null; 
       {subscribers !== null && (
         <label className="mt-2 flex items-center gap-2 text-sm font-semibold">
           <input type="checkbox" className="h-5 w-5" checked={f.notify && subscribers > 0} disabled={subscribers === 0} onChange={(e) => set("notify", e.target.checked)} />
-          🔔 {subscribers > 0 ? `Send a notification to ${subscribers} subscribed phone${subscribers === 1 ? "" : "s"}` : "Send a notification (no phones subscribed yet)"}
+          🔔 {subscribers > 0 ? `Send a notification to ${subscribers} subscribed device${subscribers === 1 ? "" : "s"}` : "Send a notification (no devices subscribed yet)"}
         </label>
       )}
 

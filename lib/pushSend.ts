@@ -1,8 +1,20 @@
 import webpush from "web-push";
 import type { Lang } from "./i18n";
 import type { Notice } from "./types";
-import { deviceInfo, noticePayload, type DeviceInfo, type PushPayload, type StoredSub } from "./push";
-import { allPushSubscriptions, removePushSubscriptions, updatePushSubscriptions } from "./store";
+import { deviceInfo, noticePayload, subKey, type DeviceInfo, type PushPayload, type StoredSub } from "./push";
+import {
+  allPushSubscriptions,
+  pushTableAll,
+  pushTableDelete,
+  pushTableGet,
+  pushTableSet,
+  removePushSubscriptions,
+  savePushSubscription,
+  updatePushSubscriptions,
+  type PushTable,
+} from "./store";
+
+type RemovedSub = StoredSub & { removedAt: string };
 
 /** VAPID keys from the environment, or null when push isn't set up. */
 export function vapidKeys(env: Record<string, string | undefined> = process.env) {
@@ -16,9 +28,9 @@ export function vapidKeys(env: Record<string, string | undefined> = process.env)
 }
 
 /** Stored subscriptions, keyed by id (damaged entries are skipped). */
-async function loadSubs(): Promise<Record<string, StoredSub>> {
+async function loadSubs(table: PushTable = "push"): Promise<Record<string, StoredSub>> {
   const out: Record<string, StoredSub> = {};
-  for (const [id, raw] of Object.entries(await allPushSubscriptions())) {
+  for (const [id, raw] of Object.entries(table === "push" ? await allPushSubscriptions() : await pushTableAll(table))) {
     try {
       out[id] = JSON.parse(raw) as StoredSub;
     } catch {
@@ -28,16 +40,80 @@ async function loadSubs(): Promise<Record<string, StoredSub>> {
   return out;
 }
 
+/** Number of subscribed devices (the same list the admin screen shows). */
 export async function subscriberCount(): Promise<number> {
-  return Object.keys(await allPushSubscriptions()).length;
+  return Object.keys(await loadSubs()).length;
 }
 
-/** Subscribed phones for the admin screen, newest first. */
-export async function listDevices(): Promise<DeviceInfo[]> {
-  const subs = await loadSubs();
-  return Object.entries(subs)
-    .map(([id, s]) => deviceInfo(id, s))
-    .sort((a, b) => b.at.localeCompare(a.at));
+/** Ids in `subs` that belong to the same browser as `sub` (same device id), other than `id`. */
+function sameDevice(subs: Record<string, StoredSub>, id: string, sub: StoredSub): string[] {
+  return sub.deviceId ? Object.keys(subs).filter((k) => k !== id && subs[k].deviceId === sub.deviceId) : [];
+}
+
+/**
+ * Save a subscription sent by a device.
+ * - `auto` (the app re-sending it on a later visit): a device an admin removed
+ *   stays removed; only its details ("last seen", language) are refreshed.
+ * - Otherwise the resident turned notifications on, which adds it (back) to the
+ *   active list.
+ * Either way an older subscription from the same browser is replaced, so each
+ * device is listed once. Returns whether the device is active or removed.
+ */
+export async function saveSubscription(sub: StoredSub, auto = false): Promise<"active" | "removed"> {
+  const id = subKey(sub.endpoint);
+  const removed = (await loadSubs("push-removed")) as Record<string, RemovedSub>;
+  const wasRemoved = removed[id] ?? removed[sameDevice(removed, id, sub)[0]];
+  if (auto && wasRemoved) {
+    await pushTableDelete("push-removed", sameDevice(removed, id, sub));
+    await pushTableSet("push-removed", id, JSON.stringify({ ...sub, last: wasRemoved.last, removedAt: wasRemoved.removedAt }));
+    return "removed";
+  }
+  const active = await loadSubs();
+  const last = active[id]?.last ?? wasRemoved?.last;
+  await savePushSubscription(id, JSON.stringify(last ? { ...sub, last } : sub));
+  await removePushSubscriptions(sameDevice(active, id, sub));
+  const stale = [id, ...sameDevice(removed, id, sub)].filter((k) => k in removed);
+  if (stale.length) await pushTableDelete("push-removed", stale);
+  return "active";
+}
+
+/** The resident turned notifications off on this device: forget it everywhere. */
+export async function forgetSubscription(id: string) {
+  await removePushSubscriptions([id]);
+  await pushTableDelete("push-removed", [id]);
+}
+
+/** Admin: stop sending to a device. It is kept in the removed list and can be added back. */
+export async function removeDevice(id: string, now = new Date()): Promise<boolean> {
+  const raw = (await allPushSubscriptions())[id];
+  if (!raw) return false;
+  await pushTableSet("push-removed", id, JSON.stringify({ ...JSON.parse(raw), removedAt: now.toISOString() }));
+  await removePushSubscriptions([id]);
+  return true;
+}
+
+/** Admin: start sending to a removed device again. */
+export async function restoreDevice(id: string): Promise<boolean> {
+  const raw = await pushTableGet("push-removed", id);
+  if (!raw) return false;
+  const sub: Partial<RemovedSub> = JSON.parse(raw);
+  delete sub.removedAt;
+  await savePushSubscription(id, JSON.stringify(sub));
+  await pushTableDelete("push-removed", [id]);
+  return true;
+}
+
+export async function isRemovedDevice(id: string): Promise<boolean> {
+  return (await pushTableGet("push-removed", id)) !== null;
+}
+
+/** Devices for the admin screen, newest first: active ones, and ones an admin removed. */
+export async function listDevices(): Promise<{ devices: DeviceInfo[]; removed: DeviceInfo[] }> {
+  const toList = (subs: Record<string, StoredSub>) =>
+    Object.entries(subs)
+      .map(([id, s]) => deviceInfo(id, s))
+      .sort((a, b) => b.at.localeCompare(a.at));
+  return { devices: toList(await loadSubs()), removed: toList(await loadSubs("push-removed")) };
 }
 
 export interface SendResult {

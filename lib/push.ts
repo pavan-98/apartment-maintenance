@@ -15,6 +15,8 @@ export interface StoredSub {
   installed?: boolean;
   /** Result of the last notification sent to this phone. */
   last?: { at: string; ok: boolean; status?: number };
+  /** Random id this browser keeps, so a new subscription replaces its old one. */
+  deviceId?: string;
 }
 
 /** What admins see about a subscribed phone (no keys, no endpoint). */
@@ -26,6 +28,8 @@ export interface DeviceInfo {
   installed: boolean;
   at: string;
   last?: StoredSub["last"];
+  /** Set for devices an admin removed. */
+  removedAt?: string;
 }
 
 /**
@@ -99,8 +103,9 @@ export function pushService(endpoint: string): string {
   return "Other";
 }
 
-export function deviceInfo(id: string, s: StoredSub): DeviceInfo {
+export function deviceInfo(id: string, s: StoredSub & { removedAt?: string }): DeviceInfo {
   return {
+    ...(s.removedAt ? { removedAt: s.removedAt } : {}),
     id,
     device: s.device || "Unknown device",
     service: pushService(s.endpoint),
@@ -118,6 +123,7 @@ export function parseSubscription(body: unknown, now = new Date(), userAgent?: s
     subscription?: { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
     lang?: unknown;
     installed?: unknown;
+    deviceId?: unknown;
   };
   const s = b.subscription;
   if (!s || !isPushEndpoint(s.endpoint)) return null;
@@ -131,6 +137,7 @@ export function parseSubscription(body: unknown, now = new Date(), userAgent?: s
     at: now.toISOString(),
     device: deviceLabel(userAgent),
     installed: b.installed === true,
+    ...(typeof b.deviceId === "string" && /^[A-Za-z0-9-]{8,64}$/.test(b.deviceId) ? { deviceId: b.deviceId } : {}),
   };
 }
 
@@ -208,6 +215,6 @@ export function messagePayload(m: CustomMessage, lang: Lang, tag: string): PushP
 
 export function testPayload(lang: Lang): PushPayload {
   return lang === "te"
-    ? { title: "🔔 పరీక్ష నోటిఫికేషన్", body: "ఈ ఫోన్‌లో నోటిఫికేషన్లు పనిచేస్తున్నాయి ✓", url: "/#notices", tag: "test" }
-    : { title: "🔔 Test notification", body: "Notifications are working on this phone ✓", url: "/#notices", tag: "test" };
+    ? { title: "🔔 పరీక్ష నోటిఫికేషన్", body: "ఈ పరికరంలో నోటిఫికేషన్లు పనిచేస్తున్నాయి ✓", url: "/#notices", tag: "test" }
+    : { title: "🔔 Test notification", body: "Notifications are working on this device ✓", url: "/#notices", tag: "test" };
 }

@@ -141,10 +141,75 @@ describe("sending", () => {
     const okId = subKey("https://fcm.googleapis.com/fcm/send/ok");
     expect(await sendPush(() => ({ title: "t", body: "", url: "/", tag: "test" }), { only: [okId] })).toEqual({ sent: 1, failed: 0, removed: 0 });
     expect(calls.map((c) => c.endpoint)).toEqual(["https://fcm.googleapis.com/fcm/send/ok"]);
-    const devices = await listDevices();
+    const { devices } = await listDevices();
     expect(devices).toHaveLength(2);
     expect(devices[0]).toMatchObject({ service: "Google", lang: "te" });
     expect(JSON.stringify(devices)).not.toContain("p256dh");
+  });
+
+  it("removes a device until an admin adds it back or the resident turns notifications on again", async () => {
+    const { saveSubscription, removeDevice, restoreDevice, listDevices, isRemovedDevice, sendPush, forgetSubscription } = await import("@/lib/pushSend");
+    const s = parseSubscription({ ...sub("https://fcm.googleapis.com/fcm/send/removed"), deviceId: "device-r1" })!;
+    const id = subKey(s.endpoint);
+    await saveSubscription(s);
+    expect(await removeDevice(id)).toBe(true);
+    let list = await listDevices();
+    expect(list.devices).toHaveLength(0);
+    expect(list.removed).toMatchObject([{ id, removedAt: expect.any(String) }]);
+    expect(await isRemovedDevice(id)).toBe(true);
+
+    // Nothing is sent to it.
+    expect(await sendPush(() => ({ title: "t", body: "", url: "/", tag: "x" }))).toEqual({ sent: 0, failed: 0, removed: 0 });
+
+    // The app re-sending its subscription on a later visit doesn't bring it back, but refreshes it.
+    const later = parseSubscription({ ...sub("https://fcm.googleapis.com/fcm/send/removed"), deviceId: "device-r1", lang: "en" }, new Date("2030-01-01T00:00:00Z"))!;
+    expect(await saveSubscription(later, true)).toBe("removed");
+    list = await listDevices();
+    expect(list.devices).toHaveLength(0);
+    expect(list.removed[0]).toMatchObject({ lang: "en", at: "2030-01-01T00:00:00.000Z" });
+
+    // Even with a new endpoint from the same browser it stays removed (and listed once).
+    const rotated = parseSubscription({ ...sub("https://fcm.googleapis.com/fcm/send/removed-2"), deviceId: "device-r1" })!;
+    expect(await saveSubscription(rotated, true)).toBe("removed");
+    list = await listDevices();
+    expect(list.removed).toHaveLength(1);
+    const id2 = subKey(rotated.endpoint);
+    expect(list.removed[0].id).toBe(id2);
+
+    // Admin adds it back.
+    expect(await restoreDevice(id2)).toBe(true);
+    list = await listDevices();
+    expect(list.devices.map((d) => d.id)).toEqual([id2]);
+    expect(list.removed).toHaveLength(0);
+    expect(list.devices[0].removedAt).toBeUndefined();
+
+    // Removed again, then the resident turns notifications on themselves: it's back too.
+    await removeDevice(id2);
+    expect(await saveSubscription(rotated)).toBe("active");
+    expect((await listDevices()).removed).toHaveLength(0);
+
+    // Turning notifications off forgets it everywhere.
+    await removeDevice(id2);
+    await forgetSubscription(id2);
+    expect(await listDevices()).toEqual({ devices: [], removed: [] });
+    expect(await restoreDevice(id2)).toBe(false);
+  });
+
+  it("lists each device once: a new subscription replaces the old one", async () => {
+    const { saveSubscription, subscriberCount, listDevices } = await import("@/lib/pushSend");
+    const store = await import("@/lib/store");
+    const a = parseSubscription({ ...sub("https://fcm.googleapis.com/fcm/send/old"), deviceId: "device-1234" })!;
+    const b = parseSubscription({ ...sub("https://fcm.googleapis.com/fcm/send/new"), deviceId: "device-1234" })!;
+    const other = parseSubscription({ ...sub("https://fcm.googleapis.com/fcm/send/other"), deviceId: "device-5678" })!;
+    await saveSubscription(a);
+    await saveSubscription(other);
+    await saveSubscription(b);
+    const endpoints = Object.values(await store.allPushSubscriptions()).map((x) => JSON.parse(x).endpoint).sort();
+    expect(endpoints).toEqual(["https://fcm.googleapis.com/fcm/send/new", "https://fcm.googleapis.com/fcm/send/other"]);
+    // A damaged entry is neither listed nor counted.
+    await store.savePushSubscription("broken", "{not json");
+    expect(await subscriberCount()).toBe(2);
+    expect((await listDevices()).devices).toHaveLength(2);
   });
 
   it("does not bring back a phone that unsubscribed while sending", async () => {
