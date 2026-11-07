@@ -148,7 +148,7 @@ describe("sending", () => {
   });
 
   it("removes a device until an admin adds it back or the resident turns notifications on again", async () => {
-    const { saveSubscription, removeDevice, restoreDevice, listDevices, isRemovedDevice, sendPush, forgetSubscription } = await import("@/lib/pushSend");
+    const { saveSubscription, removeDevice, restoreDevice, listDevices, isRemovedDevice, sendPush } = await import("@/lib/pushSend");
     const s = parseSubscription({ ...sub("https://fcm.googleapis.com/fcm/send/removed"), deviceId: "device-r1" })!;
     const id = subKey(s.endpoint);
     await saveSubscription(s);
@@ -187,12 +187,7 @@ describe("sending", () => {
     await removeDevice(id2);
     expect(await saveSubscription(rotated)).toBe("active");
     expect((await listDevices()).removed).toHaveLength(0);
-
-    // Turning notifications off forgets it everywhere.
-    await removeDevice(id2);
-    await forgetSubscription(id2);
-    expect(await listDevices()).toEqual({ devices: [], removed: [] });
-    expect(await restoreDevice(id2)).toBe(false);
+    expect(await restoreDevice(id2)).toBe(false); // nothing left to add back
   });
 
   it("lists each device once: a new subscription replaces the old one", async () => {
@@ -218,35 +213,6 @@ describe("sending", () => {
     await store.removePushSubscriptions(["a"]);
     await store.updatePushSubscriptions({ a: "2" });
     expect(await store.allPushSubscriptions()).toEqual({});
-  });
-
-  it("test route says why a test failed, so the app can repair it", async () => {
-    vi.doMock("web-push", () => ({
-      default: {
-        sendNotification: async (s: { endpoint: string }) => {
-          if (s.endpoint.endsWith("/expired")) throw Object.assign(new Error("Gone"), { statusCode: 410 });
-          if (s.endpoint.endsWith("/badkey")) throw Object.assign(new Error("x"), { statusCode: 403, body: "VAPID credentials mismatch" });
-          return { statusCode: 201 };
-        },
-      },
-    }));
-    const { saveSubscription, removeDevice } = await import("@/lib/pushSend");
-    const { POST } = await import("@/app/api/push/test/route");
-    const call = async (e: string) => {
-      const res = await POST(new Request("http://x/api/push/test", { method: "POST", body: JSON.stringify({ endpoint: `https://fcm.googleapis.com/fcm/send/${e}` }) }));
-      return { status: res.status, ...(await res.json()) };
-    };
-    const logs = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const errs = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    expect(await call("unknown")).toMatchObject({ status: 404, reason: "not-subscribed" });
-    for (const e of ["ok", "expired", "badkey", "paused"]) await saveSubscription(parseSubscription(sub(`https://fcm.googleapis.com/fcm/send/${e}`))!);
-    await removeDevice(subKey("https://fcm.googleapis.com/fcm/send/paused"));
-    expect(await call("ok")).toMatchObject({ status: 200, sent: 1 });
-    expect(await call("expired")).toMatchObject({ status: 410, reason: "gone" });
-    expect(await call("badkey")).toMatchObject({ status: 502, reason: "error", error: "403 VAPID credentials mismatch" });
-    expect(await call("paused")).toMatchObject({ status: 409, removed: true });
-    logs.mockRestore();
-    errs.mockRestore();
   });
 
   it("does nothing without VAPID keys", async () => {

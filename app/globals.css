@@ -188,3 +188,258 @@ body {
 @media print {
   .book-hide { visibility: hidden !important; }
 }
+
+/* ---------- opening animation (components/Splash.tsx) ---------- */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #fff;
+  background: radial-gradient(120% 80% at 50% 38%, #2c55c4 0%, #1e3a8a 42%, #0e1b4a 100%);
+  animation: splash-out 0.6s cubic-bezier(0.6, 0, 0.8, 0.4) 2.45s forwards;
+  cursor: pointer;
+}
+html[data-splash="off"] #splash {
+  display: none;
+}
+#splash.splash-skip {
+  animation: splash-out 0.35s ease-in forwards;
+}
+.splash-sky {
+  position: absolute;
+  inset: 0;
+}
+.splash-star {
+  position: absolute;
+  border-radius: 9999px;
+  background: #fff;
+  opacity: 0;
+  animation: splash-twinkle 2.4s ease-in-out infinite;
+}
+.splash-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 24px;
+  text-align: center;
+  animation: splash-lift 2.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.splash-halo {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  width: 300px;
+  height: 300px;
+  margin-left: -150px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(250, 178, 25, 0.28) 0%, rgba(250, 178, 25, 0.08) 45%, transparent 70%);
+  opacity: 0;
+  animation: splash-halo 1.6s ease-out 0.8s forwards;
+}
+.splash-building {
+  position: relative;
+  overflow: visible;
+}
+.splash-outline,
+.splash-ground {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 20;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.splash-outline {
+  animation: splash-draw 0.95s cubic-bezier(0.65, 0, 0.35, 1) 0.15s forwards;
+}
+.splash-ground {
+  animation: splash-draw 0.6s cubic-bezier(0.65, 0, 0.35, 1) 0.05s forwards;
+}
+.splash-fill {
+  fill: #fff;
+  opacity: 0;
+  animation: splash-fade-to 0.6s ease-out 0.75s forwards;
+  --to: 0.12;
+}
+.splash-window-off {
+  fill: #fff;
+  opacity: 0;
+  animation: splash-fade-to 0.4s ease-out 0.7s forwards;
+  --to: 0.18;
+}
+.splash-window {
+  fill: #fde68a;
+  opacity: 0;
+  animation: splash-light 0.45s ease-out forwards;
+}
+.splash-door {
+  fill: #fab219;
+  opacity: 0;
+  animation: splash-light 0.5s ease-out 1.55s forwards;
+}
+.splash-text {
+  margin-top: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.splash-lead {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.32em;
+  color: rgba(255, 255, 255, 0.78);
+  opacity: 0;
+  animation: splash-track 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 1.05s forwards;
+}
+.splash-name {
+  margin-top: 6px;
+  font-size: clamp(30px, 9vw, 44px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.splash-name span {
+  display: inline-block;
+  margin: 0 0.14em;
+  opacity: 0;
+  animation: splash-rise 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.splash-rule {
+  display: block;
+  margin-top: 14px;
+  width: 64px;
+  height: 3px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, transparent, #fab219, transparent);
+  transform: scaleX(0);
+  animation: splash-rule 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 1.7s forwards;
+}
+
+@keyframes splash-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes splash-fade-to {
+  to {
+    opacity: var(--to);
+  }
+}
+@keyframes splash-light {
+  0% {
+    opacity: 0;
+  }
+  45% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes splash-halo {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes splash-track {
+  from {
+    opacity: 0;
+    letter-spacing: 0.6em;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.32em;
+  }
+}
+@keyframes splash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes splash-rule {
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes splash-lift {
+  from {
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes splash-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+@keyframes splash-out {
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* Reduce motion: show the finished scene briefly, then fade. */
+@media (prefers-reduced-motion: reduce) {
+  #splash {
+    animation: splash-out 0.4s ease-in 0.9s forwards;
+  }
+  #splash *,
+  #splash *::before {
+    animation: none !important;
+  }
+  .splash-outline,
+  .splash-ground {
+    stroke-dashoffset: 0;
+  }
+  .splash-fill {
+    opacity: 0.12;
+  }
+  .splash-window,
+  .splash-door,
+  .splash-lead,
+  .splash-name span,
+  .splash-halo {
+    opacity: 1;
+  }
+  .splash-window-off {
+    opacity: 0.18;
+  }
+  .splash-rule {
+    transform: none;
+  }
+}
+@media print {
+  #splash {
+    display: none;
+  }
+}

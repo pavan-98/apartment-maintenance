@@ -127,62 +127,6 @@ async function turnOn(lang: Lang): Promise<PushStatus> {
   return status;
 }
 
-async function turnOff() {
-  const reg = await navigator.serviceWorker.getRegistration("/");
-  const sub = await reg?.pushManager.getSubscription();
-  if (sub) {
-    await fetch("/api/push", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: sub.endpoint }),
-    }).catch(() => undefined);
-    await sub.unsubscribe().catch(() => undefined);
-  }
-  set("off");
-}
-
-type TestReply = { sent?: number; removed?: boolean; reason?: "not-subscribed" | "gone" | "error"; error?: string };
-
-async function postTest(sub: PushSubscription): Promise<TestReply> {
-  try {
-    const res = await fetch("/api/push/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: sub.endpoint }),
-    });
-    return (await res.json().catch(() => ({ reason: "error", error: `HTTP ${res.status}` }))) as TestReply;
-  } catch {
-    return { reason: "error", error: "No internet connection" };
-  }
-}
-
-/**
- * Send a test notification to this device, repairing the subscription on the
- * way: if the server lost it, it is saved again; if the push service says it
- * has expired, a new one is made (permission is already granted, so there is
- * no prompt). Throws Error("removed") if an admin removed the device, or an
- * Error with the reason if it still could not be sent.
- */
-async function sendTest(lang: Lang) {
-  const reg = await registration();
-  let sub = await reg.pushManager.getSubscription();
-  if (!sub) throw new Error("This browser has no subscription. Turn notifications off and on again.");
-  let r = await postTest(sub);
-  if (r.reason === "not-subscribed") {
-    await save(sub, lang, true);
-    r = await postTest(sub);
-  }
-  if (r.reason === "gone" && publicKey) {
-    await sub.unsubscribe().catch(() => undefined);
-    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) });
-    await save(sub, lang);
-    syncedLang = lang;
-    r = await postTest(sub);
-  }
-  if (r.removed) throw new Error("removed");
-  if (!r.sent) throw new Error(r.error || r.reason || "not sent");
-}
-
 /** The admin-screen id of this browser's subscription (same hash the server uses), or null. */
 export async function currentDeviceId(): Promise<string | null> {
   try {
@@ -212,5 +156,5 @@ export function usePush(lang: Lang) {
   useEffect(() => {
     if (status === "on") sync(lang).catch(() => undefined);
   }, [lang, status]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { status, turnOn: () => turnOn(lang), turnOff, sendTest: () => sendTest(lang) };
+  return { status, turnOn: () => turnOn(lang) };
 }

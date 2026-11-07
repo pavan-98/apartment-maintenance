@@ -77,12 +77,6 @@ export async function saveSubscription(sub: StoredSub, auto = false): Promise<"a
   return "active";
 }
 
-/** The resident turned notifications off on this device: forget it everywhere. */
-export async function forgetSubscription(id: string) {
-  await removePushSubscriptions([id]);
-  await pushTableDelete("push-removed", [id]);
-}
-
 /** Admin: stop sending to a device. It is kept in the removed list and can be added back. */
 export async function removeDevice(id: string, now = new Date()): Promise<boolean> {
   const raw = (await allPushSubscriptions())[id];

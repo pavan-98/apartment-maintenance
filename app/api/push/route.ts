@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readClaims } from "@/lib/auth";
-import { parseSubscription, subKey, isPushEndpoint } from "@/lib/push";
-import { forgetSubscription, saveSubscription, subscriberCount, vapidKeys } from "@/lib/pushSend";
+import { parseSubscription } from "@/lib/push";
+import { saveSubscription, subscriberCount, vapidKeys } from "@/lib/pushSend";
 
 export const dynamic = "force-dynamic";
 
@@ -41,19 +41,6 @@ export async function POST(req: Request) {
   try {
     const state = await saveSubscription(sub, auto);
     return NextResponse.json({ ok: true, removed: state === "removed" });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Could not save. Please try again." }, { status: 500 });
-  }
-}
-
-/** A resident turns notifications off on this phone. */
-export async function DELETE(req: Request) {
-  const body = (await readJson(req)) as { endpoint?: unknown } | null;
-  if (!isPushEndpoint(body?.endpoint)) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  try {
-    await forgetSubscription(subKey(body.endpoint));
-    return NextResponse.json({ ok: true });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Could not save. Please try again." }, { status: 500 });

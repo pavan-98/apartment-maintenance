@@ -139,24 +139,22 @@ export function NotifyPrompt() {
   );
 }
 
-/** A small card in the Notices tab to turn notifications on or off at any time. */
+/** A small card in the Notices tab: turn notifications on, or a note that they are on. */
 export function NotifyCard() {
   const { t, lang } = useApp();
   const push = usePush(lang);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const [help, setHelp] = useState(false);
-  const [tested, setTested] = useState<"sent" | "failed" | "removed" | null>(null);
-  const [testError, setTestError] = useState("");
 
   const s = push.status;
   if (s === "loading" || s === "unsupported" || s === "disabled") return null;
 
-  const run = async (fn: () => Promise<unknown>) => {
+  const turnOn = async () => {
     setBusy(true);
     setError(false);
     try {
-      await fn();
+      await push.turnOn();
     } catch {
       setError(true);
     }
@@ -167,41 +165,15 @@ export function NotifyCard() {
     <div className="card p-4 no-print">
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-2xl" aria-hidden>
-          {s === "on" ? "🔔" : s === "denied" ? "🔕" : "🔔"}
+          {s === "denied" ? "🔕" : "🔔"}
         </span>
         <p className="min-w-0 flex-1 text-sm font-semibold">
           {s === "on" ? t("notifyCardOn") : s === "needs-install" ? t("notifyIosCard") : s === "denied" ? t("notifyBlocked") : t("notifyCardOff")}
         </p>
         {s === "off" && (
-          <button className="btn btn-primary btn-sm" onClick={() => run(push.turnOn)} disabled={busy}>
+          <button className="btn btn-primary btn-sm" onClick={turnOn} disabled={busy}>
             {busy ? t("pleaseWait") : t("notifyTurnOn")}
           </button>
-        )}
-        {s === "on" && (
-          <>
-            <button
-              className="btn btn-sm"
-              disabled={busy}
-              onClick={async () => {
-                setTested(null);
-                setBusy(true);
-                try {
-                  await push.sendTest();
-                  setTested("sent");
-                } catch (e) {
-                  const msg = (e as Error).message;
-                  setTested(msg === "removed" ? "removed" : "failed");
-                  setTestError(msg === "removed" ? "" : msg);
-                }
-                setBusy(false);
-              }}
-            >
-              {t("notifyTest")}
-            </button>
-            <button className="btn btn-sm" onClick={() => run(push.turnOff)} disabled={busy}>
-              {t("notifyTurnOff")}
-            </button>
-          </>
         )}
         {s === "needs-install" && (
           <button className="btn btn-primary btn-sm" onClick={() => setHelp(true)}>
@@ -210,14 +182,6 @@ export function NotifyCard() {
         )}
       </div>
       {error && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyFailed")}</p>}
-      {tested === "sent" && s === "on" && <p className="mt-2 text-sm text-ink-2">{t("notifyTestSent")}</p>}
-      {tested === "failed" && s === "on" && (
-        <p className="mt-2 text-sm font-semibold text-crit-ink">
-          {t("notifyTestFailed")}
-          {testError && <span className="mt-0.5 block text-xs font-normal text-muted">({testError})</span>}
-        </p>
-      )}
-      {tested === "removed" && s === "on" && <p className="mt-2 text-sm font-semibold text-crit-ink">{t("notifyTestRemoved")}</p>}
       <Sheet open={help} onClose={() => setHelp(false)} closeLabel={t("close")} title={t("notifyIosTitle")}>
         <IosSteps />
       </Sheet>

@@ -96,7 +96,6 @@ const en = {
   notifyTitle: "Get notified about new notices",
   notifyIntro: "Get a notification on this device when a new notice is posted: water cuts, lift work, meetings. Nothing else.",
   notifyTurnOn: "Turn on notifications",
-  notifyTurnOff: "Turn off",
   notifyOnNow: "Notifications are on for this device ✓",
   notifyCardOff: "Get a notification when a new notice is posted",
   notifyCardOn: "Notifications are on for this device",
@@ -112,10 +111,6 @@ const en = {
   installIntro: "Install the app to open it in one tap from your home screen, like any other app.",
   notNow: "Not now",
   pleaseWait: "Please wait…",
-  notifyTest: "Send a test",
-  notifyTestSent: "Test sent. It should appear in a few seconds. If it doesn't, check this device's settings: Settings → Apps → your browser → Notifications must be allowed (also for “Sites”), and Do Not Disturb / battery saver may delay it.",
-  notifyTestFailed: "The test could not be sent. Turn notifications off and on again, then try once more.",
-  notifyTestRemoved: "An admin has paused notifications for this device. Ask them to add it back, or turn notifications off and on again.",
 } as const;
 
 export type Key = keyof typeof en;
@@ -216,7 +211,6 @@ const te: Record<Key, string> = {
   notifyTitle: "కొత్త నోటీసుల గురించి నోటిఫికేషన్ పొందండి",
   notifyIntro: "కొత్త నోటీసు పెట్టినప్పుడు ఈ పరికరానికి నోటిఫికేషన్ వస్తుంది: నీటి సరఫరా ఆపడం, లిఫ్ట్ పనులు, మీటింగ్‌లు. ఇంకేమీ రావు.",
   notifyTurnOn: "నోటిఫికేషన్లు ఆన్ చేయండి",
-  notifyTurnOff: "ఆఫ్ చేయండి",
   notifyOnNow: "ఈ పరికరానికి నోటిఫికేషన్లు ఆన్ అయ్యాయి ✓",
   notifyCardOff: "కొత్త నోటీసు పెట్టినప్పుడు నోటిఫికేషన్ పొందండి",
   notifyCardOn: "ఈ పరికరానికి నోటిఫికేషన్లు ఆన్‌లో ఉన్నాయి",
@@ -232,10 +226,6 @@ const te: Record<Key, string> = {
   installIntro: "యాప్‌ను ఇన్‌స్టాల్ చేస్తే, ఇతర యాప్‌ల లాగే హోమ్ స్క్రీన్ నుండి ఒక్క నొక్కుతో తెరవవచ్చు.",
   notNow: "ఇప్పుడు కాదు",
   pleaseWait: "దయచేసి ఆగండి…",
-  notifyTest: "పరీక్షించండి",
-  notifyTestSent: "పరీక్ష నోటిఫికేషన్ పంపాము. కొన్ని సెకన్లలో రావాలి. రాకపోతే పరికరం Settings → Apps → మీ బ్రౌజర్ → Notifications అనుమతించారో (“Sites” కూడా) చూడండి. Do Not Disturb / బ్యాటరీ సేవర్ ఆలస్యం చేయవచ్చు.",
-  notifyTestFailed: "పరీక్ష పంపలేకపోయాము. నోటిఫికేషన్లు ఆఫ్ చేసి మళ్ళీ ఆన్ చేసి ప్రయత్నించండి.",
-  notifyTestRemoved: "ఈ పరికరానికి నోటిఫికేషన్లను అడ్మిన్ ఆపారు. మళ్ళీ జోడించమని అడగండి, లేదా నోటిఫికేషన్లు ఆఫ్ చేసి మళ్ళీ ఆన్ చేయండి.",
 };
 
 export const dict: Record<Lang, Record<Key, string>> = { en, te };

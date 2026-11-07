@@ -82,13 +82,13 @@ Residents can get a notification on their phone when a notice is posted. It uses
 
 Generate the keys **once** and keep them. If they change, every phone has to turn notifications on again.
 
-What residents see: after the notice pop-ups, the app asks them to **turn on notifications** and **install the app**. "Not now" hides it for a week, and they can turn notifications on or off any time at the top of the **Notices** tab.
+What residents see: after the notice pop-ups, the app asks them to **turn on notifications** and **install the app**. "Not now" hides it for a week, and they can turn notifications on later from the top of the **Notices** tab, which shows "Notifications are on for this device" once they are on.
 - **Android and computers** (Chrome, Edge, Firefox, Samsung Internet): works straight from the browser; installing is optional.
 - **iPhone / iPad** (iOS 16.4 or later): only after **Share → Add to Home Screen** and opening the app from the Home Screen. The app shows these steps.
 
 When you post a notice, **Send a notification to N subscribed devices** is ticked. Any current notice also has a **🔔 Notify devices** button to send it again.
 
-**Admin → 🔔 Notifications** sends your own message (not tied to a notice) in English and Telugu, with ready-made texts for a maintenance reminder, water supply and meetings. It also lists every subscribed device (device type, language, browser or installed app) with the result of the last notification, a **Send test** button and **Remove**. **Remove** moves a device to an expandable **Removed devices** list (it is sent nothing, and shows when it was last seen) with **↩ Add back**; a device that turns them on again replaces its old entry, so each one is listed once. Residents can also tap **Send a test** in the Notices tab on their own device.
+**Admin → 🔔 Notifications** sends your own message (not tied to a notice) in English and Telugu, with ready-made texts for a maintenance reminder, water supply and meetings. It also lists every subscribed device (device type, language, browser or installed app) with the result of the last notification, a **Send test** button and **Remove**. **Remove** moves a device to an expandable **Removed devices** list (it is sent nothing, and shows when it was last seen) with **↩ Add back**; a device that turns them on again replaces its old entry, so each one is listed once.
 
 ## Step 6 — Trial run, then start fresh
 

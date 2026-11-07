@@ -26,6 +26,7 @@ Built for a 15-flat building in India, with English and **Telugu** throughout, â
 - **Rules**, bilingual and grouped by topic, with an optional one-time pop-up when a rule changes. They can be printed or shared.
 - English / Telugu switch, a WhatsApp monthly summary, and a printable monthly statement.
 - **Phone notifications** for new notices (free web push, optional). After the notice pop-ups, residents are asked to turn on notifications and install the app; it works straight from the browser on Android and computers, and from the Home Screen app on iPhone. Admins can also send their own notifications and see every subscribed device with a test button.
+- **Opening animation** with the apartment's name: the building draws itself and its lights come on (once per visit, tap to skip).
 - **Installable** as an app (no automatic install prompt) and works offline with the last loaded data. Light mode only, for readability.
 
 ### For admins (`/admin`)
